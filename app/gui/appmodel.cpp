@@ -318,3 +318,12 @@ void AppModel::handleBoxArtLoaded(NvComputer* computer, NvApp app, QUrl /* image
         qWarning() << "App not found for box art callback:" << app.name;
     }
 }
+
+
+void AppModel::updateGameId(int gameId){
+    if(m_Computer->currentGameId==0&&gameId!=0) {
+        m_Computer->currentGameId = gameId;
+        m_ComputerManager->clientSideAttributeUpdated(m_Computer);
+    }
+    qWarning()<< "连接到的游戏id：" << m_Computer->currentGameId;
+}

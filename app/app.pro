@@ -68,8 +68,22 @@ macx:!disable-prebuilts {
 }
 
 unix:if(!macx|disable-prebuilts) {
+    #加入sound io的支持内容
+    CONFIG += soundio
+    INCLUDEPATH += /usr/include
+    LIBS += -L/usr/lib/x86_64-linux-gnu -lsoundio
+
+    #add ogg
+    INCLUDEPATH += /usr/include/ogg
+    LIBS += -logg
+
     CONFIG += link_pkgconfig
-    PKGCONFIG += openssl sdl2 SDL2_ttf opus
+    PKGCONFIG += openssl sdl2 SDL2_ttf
+
+    # We have our own optimized libopus.a for Steam Link
+    if(!config_SL|disable-prebuilts) {
+        PKGCONFIG += opus
+    }
 
     !disable-ffmpeg {
         packagesExist(libavcodec) {
@@ -169,6 +183,7 @@ macx {
 }
 
 SOURCES += \
+    backend/httpclient.cpp \
     backend/nvaddress.cpp \
     backend/nvapp.cpp \
     cli/pair.cpp \
@@ -194,6 +209,8 @@ SOURCES += \
     streaming/input/keyboard.cpp \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
+    streaming/microphone.cpp \
+    streaming/renderwindow.cpp \
     streaming/session.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
@@ -209,11 +226,17 @@ SOURCES += \
     wm.cpp
 
 HEADERS += \
+    SDL_compat.h \
+    backend/httpclient.h \
     backend/nvaddress.h \
     backend/nvapp.h \
     cli/pair.h \
     settings/compatfetcher.h \
     settings/mappingfetcher.h \
+    streaming/concurrentqueue.h \
+    streaming/microphone.h \
+    streaming/renderwindow.h \
+    streaming/ringbuffer.h \
     utils.h \
     backend/computerseeker.h \
     backend/identitymanager.h \
@@ -364,6 +387,13 @@ config_EGL {
 config_SL {
     message(Steam Link build configuration selected)
 
+    !disable-prebuilts {
+        # Link against our NEON-optimized libopus build
+        LIBS += -L$$PWD/../libs/steamlink/lib
+        INCLUDEPATH += $$PWD/../libs/steamlink/include
+        LIBS += -lopus -larmasm -lNE10
+    }
+
     DEFINES += EMBEDDED_BUILD STEAM_LINK HAVE_SLVIDEO HAVE_SLAUDIO
     LIBS += -lSLVideo -lSLAudio
 
@@ -473,7 +503,10 @@ TRANSLATIONS += \
     languages/qml_he.ts \
     languages/qml_ckb.ts \
     languages/qml_lt.ts \
-    languages/qml_et.ts
+    languages/qml_et.ts \
+    languages/qml_bg.ts \
+    languages/qml_eo.ts \
+    languages/qml_ta.ts
 
 # Additional import path used to resolve QML modules in Qt Creator's code model
 QML_IMPORT_PATH =

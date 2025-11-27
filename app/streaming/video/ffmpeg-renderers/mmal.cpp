@@ -16,7 +16,8 @@
 #include <QTextStream>
 
 MmalRenderer::MmalRenderer()
-    : m_Renderer(nullptr),
+    : IFFmpegRenderer(RendererType::MMAL),
+      m_Renderer(nullptr),
       m_InputPort(nullptr),
       m_BackgroundRenderer(nullptr),
       m_Window(nullptr),
@@ -80,7 +81,7 @@ void MmalRenderer::prepareToRender()
     if (session != nullptr) {
         // If we get here during a session, we need to synchronize with the event loop
         // to ensure we don't drop any important events.
-        session->flushWindowEvents();
+        session->flushWindowEvents(m_Window);
     }
     else {
         // If we get here prior to the start of a session, just pump and flush ourselves.
@@ -151,6 +152,7 @@ bool MmalRenderer::initialize(PDECODER_PARAMETERS params)
     MMAL_STATUS_T status;
 
     if (!isMmalOverlaySupported()) {
+        m_InitFailureReason = InitFailureReason::NoSoftwareSupport;
         return false;
     }
 
@@ -163,6 +165,7 @@ bool MmalRenderer::initialize(PDECODER_PARAMETERS params)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "mmal_component_create() failed: %x (%s)",
                      status, mmal_status_to_string(status));
+        m_InitFailureReason = InitFailureReason::NoSoftwareSupport;
         return false;
     }
 

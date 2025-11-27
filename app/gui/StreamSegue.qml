@@ -4,12 +4,16 @@ import QtQuick.Window 2.2
 
 import SdlGamepadKeyNavigation 1.0
 import Session 1.0
-
+import AppModel 1.0
+import StreamingPreferences 1.0
+//主要的联线逻辑
 Item {
     property Session session
+    property AppModel appModel //增加外部传递进来的appmodel，用于直接退出游戏
     property string appName
     property string stageText : isResume ? qsTr("Resuming %1...").arg(appName) :
                                            qsTr("Starting %1...").arg(appName)
+    property int appId
     property bool isResume : false
     property bool quitAfter : false
 
@@ -31,6 +35,7 @@ Item {
 
     function connectionStarted()
     {
+        appModel.updateGameId(appId)
         // Hide the UI contents so the user doesn't
         // see them briefly when we pop off the StackView
         stageSpinner.visible = false
@@ -72,14 +77,16 @@ Item {
 
     function sessionFinished(portTestResult)
     {
+        if(StreamingPreferences.quitGameWhenSessionFinished){
+            appModel.quitRunningApp()
+        }
         if (portTestResult !== 0 && portTestResult !== -1 && streamSegueErrorDialog.text) {
             streamSegueErrorDialog.text += "\n\n" + qsTr("This PC's Internet connection is blocking Moonlight. Streaming over the Internet may not work while connected to this network.")
         }
-
-        // Enable GUI gamepad usage now
+        // Re-enable GUI gamepad usage now
         SdlGamepadKeyNavigation.enable()
 
-        if (quitAfter) {
+        if (quitAfter) { //这边直接退出程序，不用关心了
             if (streamSegueErrorDialog.text) {
                 // Quit when the error dialog is acknowledged
                 streamSegueErrorDialog.quitAfter = quitAfter
@@ -92,10 +99,8 @@ Item {
         } else {
             // Exit this view
             stackView.pop()
-
             // Show the Qt window again after streaming
             window.visible = true
-
             // Display any launch errors. We do this after
             // the Qt UI is visible again to prevent losing
             // focus on the dialog which would impact gamepad
@@ -119,7 +124,7 @@ Item {
         // Show the toolbar again when popped off the stack
         toolBar.visible = true
 
-        // Enable GUI gamepad usage now
+        // Re-enable GUI gamepad usage now
         SdlGamepadKeyNavigation.enable()
     }
 
@@ -176,7 +181,7 @@ Item {
             gc()
 
             // Run the streaming session to completion
-            session.exec(Window.window)
+            session.exec(window)
         }
 
         sourceComponent: Item {}

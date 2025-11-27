@@ -180,15 +180,25 @@ enum AVPixelFormat FFmpegVideoDecoder::ffGetFormat(AVCodecContext* context,
                                                    const enum AVPixelFormat* pixFmts)
 {
     FFmpegVideoDecoder* decoder = (FFmpegVideoDecoder*)context->opaque;
-    const enum AVPixelFormat *p;
+    const AVPixelFormat *p;
+    AVPixelFormat desiredFmt;
 
-    for (p = pixFmts; *p != -1; p++) {
+    if (decoder->m_HwDecodeCfg) {
+        desiredFmt = decoder->m_HwDecodeCfg->pix_fmt;
+    }
+    else if (decoder->m_RequiredPixelFormat != AV_PIX_FMT_NONE) {
+        desiredFmt = decoder->m_RequiredPixelFormat;
+    }
+    else {
+        desiredFmt = decoder->m_FrontendRenderer->getPreferredPixelFormat(decoder->m_VideoFormat);
+    }
+
+    for (p = pixFmts; *p != AV_PIX_FMT_NONE; p++) {
         // Only match our hardware decoding codec or preferred SW pixel
         // format (if not using hardware decoding). It's crucial
         // to override the default get_format() which will try
         // to gracefully fall back to software decode and break us.
-        if (*p == (decoder->m_HwDecodeCfg ? decoder->m_HwDecodeCfg->pix_fmt : context->pix_fmt) &&
-                decoder->m_BackendRenderer->prepareDecoderContextInGetFormat(context, *p)) {
+        if (*p == desiredFmt && decoder->m_BackendRenderer->prepareDecoderContextInGetFormat(context, *p)) {
             return *p;
         }
     }
@@ -196,7 +206,7 @@ enum AVPixelFormat FFmpegVideoDecoder::ffGetFormat(AVCodecContext* context,
     // Failed to match the preferred pixel formats. Try non-preferred pixel format options
     // for non-hwaccel decoders if we didn't have a required pixel format to use.
     if (decoder->m_HwDecodeCfg == nullptr && decoder->m_RequiredPixelFormat == AV_PIX_FMT_NONE) {
-        for (p = pixFmts; *p != -1; p++) {
+        for (p = pixFmts; *p != AV_PIX_FMT_NONE; p++) {
             if (decoder->m_FrontendRenderer->isPixelFormatSupported(decoder->m_VideoFormat, *p) &&
                     decoder->m_BackendRenderer->prepareDecoderContextInGetFormat(context, *p)) {
                 return *p;
@@ -260,7 +270,7 @@ void FFmpegVideoDecoder::reset()
     // It might be touching things we're about to free.
     if (m_DecoderThread != nullptr) {
         SDL_AtomicSet(&m_DecoderThreadShouldQuit, 1);
-        LiWakeWaitForVideoFrame();
+        LiWakeWaitForVideoFrame(this->m_Pacer->getTrackIndex());
         SDL_WaitThread(m_DecoderThread, NULL);
         SDL_AtomicSet(&m_DecoderThreadShouldQuit, 0);
         m_DecoderThread = nullptr;
@@ -277,7 +287,8 @@ void FFmpegVideoDecoder::reset()
     // However, it must be called before deleting the IFFmpegRenderer
     // since the codec context may be referencing objects that we
     // need to delete in the renderer destructor.
-    avcodec_free_context(&m_VideoDecoderCtx);
+    if(m_VideoDecoderCtx!=nullptr)
+        avcodec_free_context(&m_VideoDecoderCtx);
 
     if (!m_TestOnly) {
         Session::get()->getOverlayManager().setOverlayRenderer(nullptr);
@@ -301,6 +312,31 @@ void FFmpegVideoDecoder::reset()
     }
 }
 
+bool FFmpegVideoDecoder::initializeRendererInternal(IFFmpegRenderer* renderer, PDECODER_PARAMETERS params)
+{
+    if (renderer->getRendererType() != IFFmpegRenderer::RendererType::Unknown &&
+            m_FailedRenderers.find(renderer->getRendererType()) != m_FailedRenderers.end()) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "Skipping '%s' due to prior failure",
+                    renderer->getRendererName());
+        return false;
+    }
+
+    if (!renderer->initialize(params)) {
+        if (renderer->getInitFailureReason() == IFFmpegRenderer::InitFailureReason::NoSoftwareSupport) {
+            m_FailedRenderers.insert(renderer->getRendererType());
+
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "'%s' failed to initialize. It will not be tried again.",
+                        renderer->getRendererName());
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool useAlternateFrontend)
 {
     if (useAlternateFrontend) {
@@ -310,7 +346,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
             // rendering HDR with Vulkan if possible since it's more fully featured than DRM.
             if (m_BackendRenderer->getRendererType() != IFFmpegRenderer::RendererType::Vulkan) {
                 m_FrontendRenderer = new PlVkRenderer(false, m_BackendRenderer);
-                if (m_FrontendRenderer->initialize(params) && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_HDR_SUPPORT)) {
+                if (initializeRendererInternal(m_FrontendRenderer, params) && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_HDR_SUPPORT)) {
                     return true;
                 }
                 delete m_FrontendRenderer;
@@ -325,7 +361,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
             // currently have protocols to actually get that metadata to the display).
             if (m_BackendRenderer->canExportDrmPrime()) {
                 m_FrontendRenderer = new DrmRenderer(AV_HWDEVICE_TYPE_NONE, m_BackendRenderer);
-                if (m_FrontendRenderer->initialize(params) && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_HDR_SUPPORT)) {
+                if (initializeRendererInternal(m_FrontendRenderer, params) && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_HDR_SUPPORT)) {
                     return true;
                 }
                 delete m_FrontendRenderer;
@@ -336,7 +372,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
 #if defined(HAVE_LIBPLACEBO_VULKAN) && defined(VULKAN_IS_SLOW)
             if (m_BackendRenderer->getRendererType() != IFFmpegRenderer::RendererType::Vulkan) {
                 m_FrontendRenderer = new PlVkRenderer(false, m_BackendRenderer);
-                if (m_FrontendRenderer->initialize(params) && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_HDR_SUPPORT)) {
+                if (initializeRendererInternal(m_FrontendRenderer, params) && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_HDR_SUPPORT)) {
                     return true;
                 }
                 delete m_FrontendRenderer;
@@ -350,7 +386,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
             if (qgetenv("PREFER_VULKAN") == "1") {
                 if (m_BackendRenderer->getRendererType() != IFFmpegRenderer::RendererType::Vulkan) {
                     m_FrontendRenderer = new PlVkRenderer(false, m_BackendRenderer);
-                    if (m_FrontendRenderer->initialize(params)) {
+                    if (initializeRendererInternal(m_FrontendRenderer, params)) {
                         return true;
                     }
                     delete m_FrontendRenderer;
@@ -363,7 +399,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
 #if defined(HAVE_EGL) && !defined(GL_IS_SLOW)
         if (m_BackendRenderer->canExportEGL()) {
             m_FrontendRenderer = new EGLRenderer(m_BackendRenderer);
-            if (m_FrontendRenderer->initialize(params)) {
+            if (initializeRendererInternal(m_FrontendRenderer, params)) {
                 return true;
             }
             delete m_FrontendRenderer;
@@ -386,7 +422,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
 #if (defined(VULKAN_IS_SLOW) || defined(GL_IS_SLOW)) && defined(HAVE_DRM)
         // Try DrmRenderer first if we have a slow GPU
         m_FrontendRenderer = new DrmRenderer(AV_HWDEVICE_TYPE_NONE, m_BackendRenderer);
-        if (m_FrontendRenderer->initialize(params)) {
+        if (initializeRendererInternal(m_FrontendRenderer, params)) {
             return true;
         }
         delete m_FrontendRenderer;
@@ -399,7 +435,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
         // If DRM didn't work either, try EGL now.
         if (m_BackendRenderer->canExportEGL()) {
             m_FrontendRenderer = new EGLRenderer(m_BackendRenderer);
-            if (m_FrontendRenderer->initialize(params)) {
+            if (initializeRendererInternal(m_FrontendRenderer, params)) {
                 return true;
             }
             delete m_FrontendRenderer;
@@ -409,7 +445,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
 
 #if defined(HAVE_LIBPLACEBO_VULKAN) && defined(VULKAN_IS_SLOW)
         m_FrontendRenderer = new PlVkRenderer(false, m_BackendRenderer);
-        if (m_FrontendRenderer->initialize(params)) {
+        if (initializeRendererInternal(m_FrontendRenderer, params)) {
             return true;
         }
         delete m_FrontendRenderer;
@@ -417,7 +453,7 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
 #endif
 
         m_FrontendRenderer = new SdlRenderer();
-        if (!m_FrontendRenderer->initialize(params)) {
+        if (!initializeRendererInternal(m_FrontendRenderer, params)) {
             return false;
         }
     }
@@ -425,7 +461,8 @@ bool FFmpegVideoDecoder::createFrontendRenderer(PDECODER_PARAMETERS params, bool
     return true;
 }
 
-bool FFmpegVideoDecoder::completeInitialization(const AVCodec* decoder, enum AVPixelFormat requiredFormat, PDECODER_PARAMETERS params, bool testFrame, bool useAlternateFrontend)
+bool FFmpegVideoDecoder::completeInitialization(const AVCodec* decoder, enum AVPixelFormat requiredFormat,
+        PDECODER_PARAMETERS params, bool testFrame, bool useAlternateFrontend)
 {
     // In test-only mode, we should only see test frames
     SDL_assert(!m_TestOnly || testFrame);
@@ -443,7 +480,9 @@ bool FFmpegVideoDecoder::completeInitialization(const AVCodec* decoder, enum AVP
     if (!testFrame) {
         m_Pacer = new Pacer(m_FrontendRenderer, &m_ActiveWndVideoStats);
         if (!m_Pacer->initialize(params->window, params->frameRate,
-                                 params->enableFramePacing || (params->enableVsync && (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_FORCE_PACING)))) {
+                                 params->enableFramePacing || (params->enableVsync &&
+                                 (m_FrontendRenderer->getRendererAttributes() & RENDERER_ATTRIBUTE_FORCE_PACING)),
+                                 params->trackIndex)) {
             return false;
         }
     }
@@ -642,6 +681,18 @@ bool FFmpegVideoDecoder::completeInitialization(const AVCodec* decoder, enum AVP
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                          "Failed to create decoder thread: %s", SDL_GetError());
             return false;
+        }
+
+        if (m_FrontendRenderer->getRendererType() != m_BackendRenderer->getRendererType()) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Renderer '%s' with '%s' backend chosen",
+                        m_FrontendRenderer->getRendererName(),
+                        m_BackendRenderer->getRendererName());
+        }
+        else {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "Renderer '%s' chosen",
+                        m_FrontendRenderer->getRendererName());
         }
     }
 
@@ -1016,56 +1067,68 @@ bool FFmpegVideoDecoder::tryInitializeRenderer(const AVCodec* decoder,
 
     // i == 0 - Indirect via EGL or DRM frontend with zero-copy DMA-BUF passing
     // i == 1 - Direct rendering or indirect via SDL read-back
+    bool backendInitFailure = false;
 #ifdef HAVE_EGL
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2 && !backendInitFailure; i++) {
 #else
-    for (int i = 1; i < 2; i++) {
+    for (int i = 1; i < 2 && !backendInitFailure; i++) {
 #endif
         SDL_assert(m_BackendRenderer == nullptr);
-        if ((m_BackendRenderer = createRendererFunc()) != nullptr &&
-                m_BackendRenderer->initialize((m_TestOnly || m_BackendRenderer->needsTestFrame()) ? &testFrameDecoderParams : params) &&
-                completeInitialization(decoder, requiredFormat,
+
+        if ((m_BackendRenderer = createRendererFunc()) == nullptr) {
+            // Out of memory
+            break;
+        }
+
+        // Initialize the backend renderer itself
+        if (initializeRendererInternal(m_BackendRenderer, (m_TestOnly || m_BackendRenderer->needsTestFrame()) ? &testFrameDecoderParams : params)) {
+            if (completeInitialization(decoder, requiredFormat,
                                        (m_TestOnly || m_BackendRenderer->needsTestFrame()) ? &testFrameDecoderParams : params,
                                        m_TestOnly || m_BackendRenderer->needsTestFrame(),
                                        i == 0 /* EGL/DRM */)) {
-            if (m_TestOnly) {
-                // This decoder is only for testing capabilities, so don't bother
-                // creating a usable renderer
-                return true;
-            }
-
-            if (m_BackendRenderer->needsTestFrame()) {
-                // The test worked, so now let's initialize it for real
-                reset();
-                if ((m_BackendRenderer = createRendererFunc()) != nullptr &&
-                        m_BackendRenderer->initialize(params) &&
-                        completeInitialization(decoder, requiredFormat, params, false, i == 0 /* EGL/DRM */)) {
+                if (m_TestOnly) {
+                    // This decoder is only for testing capabilities, so don't bother
+                    // creating a usable renderer
                     return true;
                 }
-                else {
-                    SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Decoder failed to initialize after successful test");
 
-                    if (m_BackendRenderer != nullptr && failureReason != nullptr) {
-                        *failureReason = m_BackendRenderer->getInitFailureReason();
+                if (m_BackendRenderer->needsTestFrame()) {
+                    // The test worked, so now let's initialize it for real
+                    reset();
+
+                    if ((m_BackendRenderer = createRendererFunc()) == nullptr) {
+                        // Out of memory
+                        break;
                     }
 
-                    reset();
+                    if (initializeRendererInternal(m_BackendRenderer, params) &&
+                        completeInitialization(decoder, requiredFormat, params, false, i == 0 /* EGL/DRM */)) {
+                        return true;
+                    }
+                    else {
+                        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Decoder failed to initialize after successful test");
+                    }
                 }
-            }
-            else {
-                // No test required. Good to go now.
-                return true;
+                else {
+                    // No test required. Good to go now.
+                    return true;
+                }
             }
         }
         else {
-            if (m_BackendRenderer != nullptr && failureReason != nullptr) {
-                *failureReason = m_BackendRenderer->getInitFailureReason();
-            }
-
-            // Failed to initialize, so keep looking
-            reset();
+            // If we failed to initialize the backend entirely, there's no sense in trying
+            // a different frontend renderer as it won't make a difference.
+            backendInitFailure = true;
         }
+
+        auto backendFailureReason = m_BackendRenderer->getInitFailureReason();
+
+        if (failureReason != nullptr) {
+            *failureReason = backendFailureReason;
+        }
+
+        reset();
     }
 
     // reset() must be called before we reach this point!
@@ -1076,15 +1139,15 @@ bool FFmpegVideoDecoder::tryInitializeRenderer(const AVCodec* decoder,
 #define TRY_PREFERRED_PIXEL_FORMAT(RENDERER_TYPE) \
     { \
         RENDERER_TYPE renderer; \
-        if (renderer.getPreferredPixelFormat(params->videoFormat) == decoder->pix_fmts[i]) { \
+        if (renderer.getPreferredPixelFormat(params->videoFormat) == decoder_pix_fmts[i]) { \
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, \
                         "Trying " #RENDERER_TYPE " for codec %s due to preferred pixel format: 0x%x", \
-                        decoder->name, decoder->pix_fmts[i]); \
-            if (tryInitializeRenderer(decoder, decoder->pix_fmts[i], params, nullptr, nullptr, \
+                        decoder->name, decoder_pix_fmts[i]); \
+            if (tryInitializeRenderer(decoder, decoder_pix_fmts[i], params, nullptr, nullptr, \
                                       []() -> IFFmpegRenderer* { return new RENDERER_TYPE(); })) { \
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, \
                             "Chose " #RENDERER_TYPE " for codec %s due to preferred pixel format: 0x%x", \
-                            decoder->name, decoder->pix_fmts[i]); \
+                            decoder->name, decoder_pix_fmts[i]); \
                 return true; \
             } \
         } \
@@ -1093,16 +1156,16 @@ bool FFmpegVideoDecoder::tryInitializeRenderer(const AVCodec* decoder,
 #define TRY_SUPPORTED_NON_PREFERRED_PIXEL_FORMAT(RENDERER_TYPE) \
     { \
         RENDERER_TYPE renderer; \
-        if (decoder->pix_fmts[i] != renderer.getPreferredPixelFormat(params->videoFormat) && \
-            renderer.isPixelFormatSupported(params->videoFormat, decoder->pix_fmts[i])) { \
+        if (decoder_pix_fmts[i] != renderer.getPreferredPixelFormat(params->videoFormat) && \
+            renderer.isPixelFormatSupported(params->videoFormat, decoder_pix_fmts[i])) { \
             SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, \
                         "Trying " #RENDERER_TYPE " for codec %s due to compatible pixel format: 0x%x", \
-                        decoder->name, decoder->pix_fmts[i]); \
-            if (tryInitializeRenderer(decoder, decoder->pix_fmts[i], params, nullptr, nullptr, \
+                        decoder->name, decoder_pix_fmts[i]); \
+            if (tryInitializeRenderer(decoder, decoder_pix_fmts[i], params, nullptr, nullptr, \
                                       []() -> IFFmpegRenderer* { return new RENDERER_TYPE(); })) { \
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, \
                             "Chose " #RENDERER_TYPE " for codec %s due to compatible pixel format: 0x%x", \
-                            decoder->name, decoder->pix_fmts[i]); \
+                            decoder->name, decoder_pix_fmts[i]); \
                 return true; \
             } \
         } \
@@ -1115,6 +1178,16 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
     if (!decoder) {
         return false;
     }
+
+    const AVPixelFormat* decoder_pix_fmts;
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    if (avcodec_get_supported_config(nullptr, decoder, AV_CODEC_CONFIG_PIX_FORMAT, 0,
+                                     (const void**)&decoder_pix_fmts, nullptr) < 0) {
+        decoder_pix_fmts = nullptr;
+    }
+#else
+    decoder_pix_fmts = decoder->pix_fmts;
+#endif
 
     // This might be a hwaccel decoder, so try any hw configs first
     if (tryHwAccel) {
@@ -1141,7 +1214,7 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
         }
     }
 
-    if (decoder->pix_fmts == NULL) {
+    if (decoder_pix_fmts == NULL) {
         // Supported output pixel formats are unknown. We'll just try DRM/SDL and hope it can cope.
 
 #if defined(HAVE_DRM) && defined(GL_IS_SLOW)
@@ -1177,11 +1250,11 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
     // Even if it didn't completely deadlock us, the performance would likely be atrocious.
     if (strcmp(decoder->name, "h264_mmal") == 0) {
 #ifdef HAVE_MMAL
-        for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+        for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
             TRY_PREFERRED_PIXEL_FORMAT(MmalRenderer);
         }
 
-        for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+        for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
             TRY_SUPPORTED_NON_PREFERRED_PIXEL_FORMAT(MmalRenderer);
         }
 #endif
@@ -1191,7 +1264,7 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
     }
 
     // Check if any of our decoders prefer any of the pixel formats first
-    for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
 #ifdef HAVE_DRM
         TRY_PREFERRED_PIXEL_FORMAT(DrmRenderer);
 #endif
@@ -1204,7 +1277,7 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
     }
 
     // Nothing prefers any of them. Let's see if anyone will tolerate one.
-    for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
 #ifdef HAVE_DRM
         TRY_SUPPORTED_NON_PREFERRED_PIXEL_FORMAT(DrmRenderer);
 #endif
@@ -1219,10 +1292,10 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
 #if defined(HAVE_LIBPLACEBO_VULKAN) && defined(VULKAN_IS_SLOW)
     // If we got here with VULKAN_IS_SLOW, DrmRenderer didn't work,
     // so we have to resort to PlVkRenderer.
-    for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
         TRY_PREFERRED_PIXEL_FORMAT(PlVkRenderer);
     }
-    for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
         TRY_SUPPORTED_NON_PREFERRED_PIXEL_FORMAT(PlVkRenderer);
     }
 #endif
@@ -1230,10 +1303,10 @@ bool FFmpegVideoDecoder::tryInitializeRendererForUnknownDecoder(const AVCodec* d
 #ifdef GL_IS_SLOW
     // If we got here with GL_IS_SLOW, DrmRenderer didn't work, so we have
     // to resort to SdlRenderer.
-    for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
         TRY_PREFERRED_PIXEL_FORMAT(SdlRenderer);
     }
-    for (int i = 0; decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
         TRY_SUPPORTED_NON_PREFERRED_PIXEL_FORMAT(SdlRenderer);
     }
 #endif
@@ -1369,9 +1442,18 @@ bool FFmpegVideoDecoder::tryInitializeNonHwAccelDecoder(PDECODER_PARAMETERS para
 
         // Skip decoders without zero-copy output formats if requested
         if (requireZeroCopyFormat) {
+            const AVPixelFormat* decoder_pix_fmts;
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+            if (avcodec_get_supported_config(nullptr, decoder, AV_CODEC_CONFIG_PIX_FORMAT, 0,
+                                             (const void**)&decoder_pix_fmts, nullptr) < 0) {
+                decoder_pix_fmts = nullptr;
+            }
+#else
+            decoder_pix_fmts = decoder->pix_fmts;
+#endif
             bool foundZeroCopyFormat = false;
-            for (int i = 0; decoder->pix_fmts && decoder->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
-                if (isZeroCopyFormat(decoder->pix_fmts[i])) {
+            for (int i = 0; decoder_pix_fmts && decoder_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+                if (isZeroCopyFormat(decoder_pix_fmts[i])) {
                     foundZeroCopyFormat = true;
                     break;
                 }
@@ -1580,18 +1662,19 @@ int FFmpegVideoDecoder::decoderThreadProcThunk(void *context)
 void FFmpegVideoDecoder::decoderThreadProc()
 {
     while (!SDL_AtomicGet(&m_DecoderThreadShouldQuit)) {
+        int trackIndex=this->m_Pacer->getTrackIndex();
         if (m_FramesIn == m_FramesOut) {
             VIDEO_FRAME_HANDLE handle;
             PDECODE_UNIT du;
 
             // Waiting for input. All output frames have been received.
             // Block until we receive a new frame from the host.
-            if (!LiWaitForNextVideoFrame(&handle, &du)) {
+            if (!LiWaitForNextVideoFrame(&handle, &du,trackIndex)) {
                 // This might be a signal from the main thread to exit
                 continue;
             }
 
-            LiCompleteVideoFrame(handle, submitDecodeUnit(du));
+            LiCompleteVideoFrame(handle, submitDecodeUnit(du),trackIndex);
         }
 
         if (m_FramesIn != m_FramesOut) {
@@ -1682,9 +1765,9 @@ void FFmpegVideoDecoder::decoderThreadProc()
 
                     // No output data, so let's try to submit more input data,
                     // while we're waiting for this to frame to come back.
-                    if (LiPollNextVideoFrame(&handle, &du)) {
+                    if (LiPollNextVideoFrame(&handle, &du,this->m_Pacer->getTrackIndex())) {
                         // FIXME: Handle EAGAIN on avcodec_send_packet() properly?
-                        LiCompleteVideoFrame(handle, submitDecodeUnit(du));
+                        LiCompleteVideoFrame(handle, submitDecodeUnit(du),trackIndex);
                     }
                     else {
                         // No output data or input data. Let's wait a little bit.
@@ -1716,7 +1799,7 @@ void FFmpegVideoDecoder::decoderThreadProc()
 
                     // Just in case the error resulted in the loss of the frame,
                     // request an IDR frame to reset our decoder state.
-                    LiRequestIdrFrame();
+                    LiRequestIdrFrame(trackIndex);
                 }
             } while (err == AVERROR(EAGAIN) && !SDL_AtomicGet(&m_DecoderThreadShouldQuit));
 

@@ -98,6 +98,369 @@ Flickable {
         id: settingsColumn1
         width: settingsPage.width / 2
         spacing: 15
+        GroupBox {
+            id: uiSettingsGroupBox
+            width: (parent.width - (parent.leftPadding + parent.rightPadding))
+            padding: 12
+            title: "<font color=\"skyblue\">" + qsTr("UI Settings") + "</font>"
+            font.pointSize: 12
+
+            Column {
+                anchors.fill: parent
+                spacing: 5
+
+                Label {
+                    width: parent.width
+                    id: loginModeTitle
+                    text: qsTr("Login")
+                    font.pointSize: 12
+                    wrapMode: Text.Wrap
+                }
+
+                CheckBox {
+                    id: loginModeCheck
+                    width: parent.width
+                    text: qsTr("Host Login Mode")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.loginMode
+                    onCheckedChanged: {
+                        StreamingPreferences.loginMode = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Use the host user and password to login and registe PIN.")
+                }
+
+                Label {
+                    width: parent.width
+                    id: quitGameTitle
+                    text: qsTr("Session")
+                    font.pointSize: 12
+                    wrapMode: Text.Wrap
+                }
+
+                CheckBox {
+                    id: quitGameCheck
+                    width: parent.width
+                    text: qsTr("Quit game when session finished")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.quitGameWhenSessionFinished
+                    onCheckedChanged: {
+                        StreamingPreferences.quitGameWhenSessionFinished = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Quit game when session finished. You will lose any unsaved progress!")
+                }
+
+                CheckBox {
+                    id: quitAppAfter
+                    width: parent.width
+                    text: qsTr("Quit app on host PC after ending stream")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.quitAppAfter
+                    onCheckedChanged: {
+                        StreamingPreferences.quitAppAfter = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("This will close the app or game you are streaming when you end your stream. You will lose any unsaved progress!")
+                }
+
+                Label {
+                    width: parent.width
+                    id: languageTitle
+                    text: qsTr("Language")
+                    font.pointSize: 12
+                    wrapMode: Text.Wrap
+                }
+
+                AutoResizingComboBox {
+                    // ignore setting the index at first, and actually set it when the component is loaded
+                    Component.onCompleted: {
+                        var saved_language = StreamingPreferences.language
+                        currentIndex = 0
+                        for (var i = 0; i < languageListModel.count; i++) {
+                            var el_language = languageListModel.get(i).val;
+                            if (saved_language === el_language) {
+                                currentIndex = i
+                                break
+                            }
+                        }
+
+                        activated(currentIndex)
+                    }
+
+                    id: languageComboBox
+                    textRole: "text"
+                    model: ListModel {
+                        id: languageListModel
+                        ListElement {
+                            text: qsTr("Automatic")
+                            val: StreamingPreferences.LANG_AUTO
+                        }
+                        // ListElement {
+                        //     text: "Deutsch" // German
+                        //     val: StreamingPreferences.LANG_DE
+                        // }
+                        ListElement {
+                            text: "English"
+                            val: StreamingPreferences.LANG_EN
+                        }
+                        // ListElement {
+                        //     text: "Français" // French
+                        //     val: StreamingPreferences.LANG_FR
+                        // }
+                        ListElement {
+                            text: "简体中文" // Simplified Chinese
+                            val: StreamingPreferences.LANG_ZH_CN
+                        }
+                        // ListElement {
+                        //     text: "Norwegian Bokmål"
+                        //     val: StreamingPreferences.LANG_NB_NO
+                        // }
+                        // ListElement {
+                        //     text: "русский" // Russian
+                        //     val: StreamingPreferences.LANG_RU
+                        // }
+                        // ListElement {
+                        //     text: "Español" // Spanish
+                        //     val: StreamingPreferences.LANG_ES
+                        // }
+                        // ListElement {
+                        //     text: "日本語" // Japanese
+                        //     val: StreamingPreferences.LANG_JA
+                        // }
+                        // ListElement {
+                        //     text: "Tiếng Việt" // Vietnamese
+                        //     val: StreamingPreferences.LANG_VI
+                        // }
+                        // ListElement {
+                        //     text: "ภาษาไทย" // Thai
+                        //     val: StreamingPreferences.LANG_TH
+                        // }
+                        // ListElement {
+                        //     text: "한국어" // Korean
+                        //     val: StreamingPreferences.LANG_KO
+                        // }
+                        // ListElement {
+                        //     text: "Magyar" // Hungarian
+                        //     val: StreamingPreferences.LANG_HU
+                        // }
+                        // ListElement {
+                        //     text: "Nederlands" // Dutch
+                        //     val: StreamingPreferences.LANG_NL
+                        // }
+                        // ListElement {
+                        //     text: "Svenska" // Swedish
+                        //     val: StreamingPreferences.LANG_SV
+                        // }
+                        // ListElement {
+                        //     text: "Türkçe" // Turkish
+                        //     val: StreamingPreferences.LANG_TR
+                        // }
+                        // /* ListElement {
+                        //     text: "Українська" // Ukrainian
+                        //     val: StreamingPreferences.LANG_UK
+                        // } */
+                        // ListElement {
+                        //     text: "繁體中文" // Traditional Chinese
+                        //     val: StreamingPreferences.LANG_ZH_TW
+                        // }
+                        // ListElement {
+                        //     text: "Português" // Portuguese
+                        //     val: StreamingPreferences.LANG_PT
+                        // }
+                        // /* ListElement {
+                        //     text: "Português do Brasil" // Brazilian Portuguese
+                        //     val: StreamingPreferences.LANG_PT_BR
+                        // } */
+                        // ListElement {
+                        //     text: "Ελληνικά" // Greek
+                        //     val: StreamingPreferences.LANG_EL
+                        // }
+                        // ListElement {
+                        //     text: "Italiano" // Italian
+                        //     val: StreamingPreferences.LANG_IT
+                        // }
+                        // /* ListElement {
+                        //     text: "हिन्दी, हिंदी" // Hindi
+                        //     val: StreamingPreferences.LANG_HI
+                        // } */
+                        // ListElement {
+                        //     text: "Język polski" // Polish
+                        //     val: StreamingPreferences.LANG_PL
+                        // }
+                        // ListElement {
+                        //     text: "Čeština" // Czech
+                        //     val: StreamingPreferences.LANG_CS
+                        // }
+                        // /* ListElement {
+                        //     text: "עִבְרִית" // Hebrew
+                        //     val: StreamingPreferences.LANG_HE
+                        // } */
+                        // /* ListElement {
+                        //     text: "کرمانجیی خواروو" // Central Kurdish
+                        //     val: StreamingPreferences.LANG_CKB
+                        // } */
+                        // /* ListElement {
+                        //     text: "Lietuvių kalba" // Lithuanian
+                        //     val: StreamingPreferences.LANG_LT
+                        // } */
+                        // /* ListElement {
+                        //     text: "Eesti" // Estonian
+                        //     val: StreamingPreferences.LANG_ET
+                        // } */
+                        // ListElement {
+                        //     text: "Български" // Bulgarian
+                        //     val: StreamingPreferences.LANG_BG
+                        // }
+                        // /* ListElement {
+                        //     text: "Esperanto"
+                        //     val: StreamingPreferences.LANG_EO
+                        // } */
+                        // ListElement {
+                        //     text: "தமிழ்" // Tamil
+                        //     val: StreamingPreferences.LANG_TA
+                        // }
+                    }
+                    // ::onActivated must be used, as it only listens for when the index is changed by a human
+                    onActivated : {
+                        // Retranslating is expensive, so only do it if the language actually changed
+                        var new_language = languageListModel.get(currentIndex).val
+                        if (StreamingPreferences.language !== new_language) {
+                            StreamingPreferences.language = languageListModel.get(currentIndex).val
+                            if (!StreamingPreferences.retranslate()) {
+                                ToolTip.show(qsTr("You must restart Moonlight for this change to take effect"), 5000)
+                            }
+                            else {
+                                // Force the back operation to pop any AppView pages that exist.
+                                // The AppView stops working after retranslate() for some reason.
+                                window.clearOnBack = true
+
+                                // Signal other controls to adjust their text
+                                languageChanged()
+                            }
+                        }
+                    }
+                }
+
+                Label {
+                    width: parent.width
+                    id: uiDisplayModeTitle
+                    text: qsTr("GUI display mode")
+                    font.pointSize: 12
+                    wrapMode: Text.Wrap
+                    visible: SystemProperties.hasDesktopEnvironment
+                }
+
+                AutoResizingComboBox {
+                    // ignore setting the index at first, and actually set it when the component is loaded
+                    Component.onCompleted: {
+                        if (!visible) {
+                            // Do nothing if the control won't even be visible
+                            return
+                        }
+
+                        var saved_uidisplaymode = StreamingPreferences.uiDisplayMode
+                        currentIndex = 0
+                        for (var i = 0; i < uiDisplayModeListModel.count; i++) {
+                            var el_uidisplaymode = uiDisplayModeListModel.get(i).val;
+                            if (saved_uidisplaymode === el_uidisplaymode) {
+                                currentIndex = i
+                                break
+                            }
+                        }
+
+                        activated(currentIndex)
+                    }
+
+                    id: uiDisplayModeComboBox
+                    visible: SystemProperties.hasDesktopEnvironment
+                    textRole: "text"
+                    model: ListModel {
+                        id: uiDisplayModeListModel
+                        ListElement {
+                            text: qsTr("Windowed")
+                            val: StreamingPreferences.UI_WINDOWED
+                        }
+                        ListElement {
+                            text: qsTr("Maximized")
+                            val: StreamingPreferences.UI_MAXIMIZED
+                        }
+                        ListElement {
+                            text: qsTr("Fullscreen")
+                            val: StreamingPreferences.UI_FULLSCREEN
+                        }
+                    }
+                    // ::onActivated must be used, as it only listens for when the index is changed by a human
+                    onActivated : {
+                        StreamingPreferences.uiDisplayMode = uiDisplayModeListModel.get(currentIndex).val
+                    }
+                }
+
+                CheckBox {
+                    id: connectionWarningsCheck
+                    width: parent.width
+                    text: qsTr("Show connection quality warnings")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.connectionWarnings
+                    onCheckedChanged: {
+                        StreamingPreferences.connectionWarnings = checked
+                    }
+                }
+
+                CheckBox {
+                    id: configurationWarningsCheck
+                    width: parent.width
+                    text: qsTr("Show configuration warnings")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.configurationWarnings
+                    onCheckedChanged: {
+                        StreamingPreferences.configurationWarnings = checked
+                    }
+                }
+
+                CheckBox {
+                    visible: SystemProperties.hasDiscordIntegration
+                    id: discordPresenceCheck
+                    width: parent.width
+                    text: qsTr("Discord Rich Presence integration")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.richPresence
+                    onCheckedChanged: {
+                        StreamingPreferences.richPresence = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Updates your Discord status to display the name of the game you're streaming.")
+                }
+
+                CheckBox {
+                    id: keepAwakeCheck
+                    width: parent.width
+                    text: qsTr("Keep the display awake while streaming")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.keepAwake
+                    onCheckedChanged: {
+                        StreamingPreferences.keepAwake = checked
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Prevents the screensaver from starting or the display from going to sleep while streaming.")
+                }
+            }
+        }
 
         GroupBox {
             id: basicSettingsGroupBox
@@ -281,11 +644,13 @@ Flickable {
                                 StreamingPreferences.width = selectedWidth
                                 StreamingPreferences.height = selectedHeight
 
-                                StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
-                                                                                                          StreamingPreferences.height,
-                                                                                                          StreamingPreferences.fps,
-                                                                                                          StreamingPreferences.enableYUV444);
-                                slider.value = StreamingPreferences.bitrateKbps
+                                if (StreamingPreferences.autoAdjustBitrate) {
+                                    StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
+                                                                                                              StreamingPreferences.height,
+                                                                                                              StreamingPreferences.fps,
+                                                                                                              StreamingPreferences.enableYUV444);
+                                    slider.value = StreamingPreferences.bitrateKbps
+                                }
                             }
 
                             lastIndexValue = currentIndex
@@ -447,11 +812,13 @@ Flickable {
                             if (StreamingPreferences.fps !== selectedFps) {
                                 StreamingPreferences.fps = selectedFps
 
-                                StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
-                                                                                                          StreamingPreferences.height,
-                                                                                                          StreamingPreferences.fps,
-                                                                                                          StreamingPreferences.enableYUV444);
-                                slider.value = StreamingPreferences.bitrateKbps
+                                if (StreamingPreferences.autoAdjustBitrate) {
+                                    StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
+                                                                                                              StreamingPreferences.height,
+                                                                                                              StreamingPreferences.fps,
+                                                                                                              StreamingPreferences.enableYUV444);
+                                    slider.value = StreamingPreferences.bitrateKbps
+                                }
                             }
 
                             lastIndexValue = currentIndex
@@ -678,26 +1045,47 @@ Flickable {
                     wrapMode: Text.Wrap
                 }
 
-                Slider {
-                    id: slider
+                Row {
+                    width: parent.width
+                    spacing: 5
 
-                    value: StreamingPreferences.bitrateKbps
+                    Slider {
+                        id: slider
 
-                    stepSize: 500
-                    from : 500
-                    to: StreamingPreferences.unlockBitrate ? 500000 : 150000
+                        value: StreamingPreferences.bitrateKbps
 
-                    snapMode: "SnapOnRelease"
-                    width: Math.min(bitrateDesc.implicitWidth, parent.width)
+                        stepSize: 500
+                        from : 500
+                        to: StreamingPreferences.unlockBitrate ? 500000 : 150000
 
-                    onValueChanged: {
-                        bitrateTitle.text = qsTr("Video bitrate: %1 Mbps").arg(value / 1000.0)
-                        StreamingPreferences.bitrateKbps = value
+                        snapMode: "SnapOnRelease"
+                        width: Math.min(bitrateDesc.implicitWidth, parent.width - (resetBitrateButton.visible ? resetBitrateButton.width + parent.spacing : 0))
+
+                        onValueChanged: {
+                            bitrateTitle.text = qsTr("Video bitrate: %1 Mbps").arg(value / 1000.0)
+                            StreamingPreferences.bitrateKbps = value
+                        }
+
+                        onMoved: {
+                            StreamingPreferences.autoAdjustBitrate = false
+                        }
+
+                        Component.onCompleted: {
+                            // Refresh the text after translations change
+                            languageChanged.connect(valueChanged)
+                        }
                     }
 
-                    Component.onCompleted: {
-                        // Refresh the text after translations change
-                        languageChanged.connect(valueChanged)
+                    Button {
+                        id: resetBitrateButton
+                        text: qsTr("Use Default (%1 Mbps)").arg(StreamingPreferences.getDefaultBitrate(StreamingPreferences.width, StreamingPreferences.height, StreamingPreferences.fps, StreamingPreferences.enableYUV444) / 1000.0)
+                        visible: StreamingPreferences.bitrateKbps !== StreamingPreferences.getDefaultBitrate(StreamingPreferences.width, StreamingPreferences.height, StreamingPreferences.fps, StreamingPreferences.enableYUV444)
+                        onClicked: {
+                            var defaultBitrate = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width, StreamingPreferences.height, StreamingPreferences.fps, StreamingPreferences.enableYUV444)
+                            StreamingPreferences.bitrateKbps = defaultBitrate
+                            StreamingPreferences.autoAdjustBitrate = true
+                            slider.value = defaultBitrate
+                        }
                     }
                 }
 
@@ -709,7 +1097,21 @@ Flickable {
                     wrapMode: Text.Wrap
                     visible: SystemProperties.hasDesktopEnvironment
                 }
+                CheckBox {
+                    id: multiDisplaySupportCheck
+                    width: parent.width
+                    text: qsTr("multi display support(need sunshine-super)")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.multiDisplaySupport
+                    onCheckedChanged: {
+                        StreamingPreferences.multiDisplaySupport = checked
+                    }
 
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Provide support for multiple displays based on the number of client displays.")
+                }
                 AutoResizingComboBox {
                     function createModel() {
                         var model = Qt.createQmlObject('import QtQuick 2.0; ListModel {}', parent, '')
@@ -938,301 +1340,10 @@ Flickable {
                         StreamingPreferences.gameOptimizations = checked
                     }
                 }
-
-                CheckBox {
-                    id: quitAppAfter
-                    width: parent.width
-                    text: qsTr("Quit app on host PC after ending stream")
-                    font.pointSize: 12
-                    checked: StreamingPreferences.quitAppAfter
-                    onCheckedChanged: {
-                        StreamingPreferences.quitAppAfter = checked
-                    }
-
-                    ToolTip.delay: 1000
-                    ToolTip.timeout: 5000
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("This will close the app or game you are streaming when you end your stream. You will lose any unsaved progress!")
-                }
             }
         }
 
-        GroupBox {
-            id: uiSettingsGroupBox
-            width: (parent.width - (parent.leftPadding + parent.rightPadding))
-            padding: 12
-            title: "<font color=\"skyblue\">" + qsTr("UI Settings") + "</font>"
-            font.pointSize: 12
 
-            Column {
-                anchors.fill: parent
-                spacing: 5
-
-                Label {
-                    width: parent.width
-                    id: languageTitle
-                    text: qsTr("Language")
-                    font.pointSize: 12
-                    wrapMode: Text.Wrap
-                }
-
-                AutoResizingComboBox {
-                    // ignore setting the index at first, and actually set it when the component is loaded
-                    Component.onCompleted: {
-                        var saved_language = StreamingPreferences.language
-                        currentIndex = 0
-                        for (var i = 0; i < languageListModel.count; i++) {
-                            var el_language = languageListModel.get(i).val;
-                            if (saved_language === el_language) {
-                                currentIndex = i
-                                break
-                            }
-                        }
-
-                        activated(currentIndex)
-                    }
-
-                    id: languageComboBox
-                    textRole: "text"
-                    model: ListModel {
-                        id: languageListModel
-                        ListElement {
-                            text: qsTr("Automatic")
-                            val: StreamingPreferences.LANG_AUTO
-                        }
-                        ListElement {
-                            text: "Deutsch" // German
-                            val: StreamingPreferences.LANG_DE
-                        }
-                        ListElement {
-                            text: "English"
-                            val: StreamingPreferences.LANG_EN
-                        }
-                        ListElement {
-                            text: "Français" // French
-                            val: StreamingPreferences.LANG_FR
-                        }
-                        ListElement {
-                            text: "简体中文" // Simplified Chinese
-                            val: StreamingPreferences.LANG_ZH_CN
-                        }
-                        ListElement {
-                            text: "Norwegian Bokmål"
-                            val: StreamingPreferences.LANG_NB_NO
-                        }
-                        ListElement {
-                            text: "русский" // Russian
-                            val: StreamingPreferences.LANG_RU
-                        }
-                        ListElement {
-                            text: "Español" // Spanish
-                            val: StreamingPreferences.LANG_ES
-                        }
-                        ListElement {
-                            text: "日本語" // Japanese
-                            val: StreamingPreferences.LANG_JA
-                        }
-                        ListElement {
-                            text: "Tiếng Việt" // Vietnamese
-                            val: StreamingPreferences.LANG_VI
-                        }
-                        ListElement {
-                            text: "ภาษาไทย" // Thai
-                            val: StreamingPreferences.LANG_TH
-                        }
-                        ListElement {
-                            text: "한국어" // Korean
-                            val: StreamingPreferences.LANG_KO
-                        }
-                        ListElement {
-                            text: "Magyar" // Hungarian
-                            val: StreamingPreferences.LANG_HU
-                        }
-                        ListElement {
-                            text: "Nederlands" // Dutch
-                            val: StreamingPreferences.LANG_NL
-                        }
-                        ListElement {
-                            text: "Svenska" // Swedish
-                            val: StreamingPreferences.LANG_SV
-                        }
-                        ListElement {
-                            text: "Türkçe" // Turkish
-                            val: StreamingPreferences.LANG_TR
-                        }
-                        /* ListElement {
-                            text: "Українська" // Ukrainian
-                            val: StreamingPreferences.LANG_UK
-                        } */
-                        ListElement {
-                            text: "繁體中文" // Traditional Chinese
-                            val: StreamingPreferences.LANG_ZH_TW
-                        }
-                        ListElement {
-                            text: "Português" // Portuguese
-                            val: StreamingPreferences.LANG_PT
-                        }
-                        /* ListElement {
-                            text: "Português do Brasil" // Brazilian Portuguese
-                            val: StreamingPreferences.LANG_PT_BR
-                        } */
-                        ListElement {
-                            text: "Ελληνικά" // Greek
-                            val: StreamingPreferences.LANG_EL
-                        }
-                        ListElement {
-                            text: "Italiano" // Italian
-                            val: StreamingPreferences.LANG_IT
-                        }
-                        /* ListElement {
-                            text: "हिन्दी, हिंदी" // Hindi
-                            val: StreamingPreferences.LANG_HI
-                        } */
-                        ListElement {
-                            text: "Język polski" // Polish
-                            val: StreamingPreferences.LANG_PL
-                        }
-                        ListElement {
-                            text: "Čeština" // Czech
-                            val: StreamingPreferences.LANG_CS
-                        }
-                        /* ListElement {
-                            text: "עִבְרִית" // Hebrew
-                            val: StreamingPreferences.LANG_HE
-                        } */
-                        /* ListElement {
-                            text: "کرمانجیی خواروو" // Central Kurdish
-                            val: StreamingPreferences.LANG_CKB
-                        } */
-                        /* ListElement {
-                            text: "Lietuvių kalba" // Lithuanian
-                            val: StreamingPreferences.LANG_LT
-                        } */
-                        /* ListElement {
-                            text: "Eesti" // Estonian
-                            val: StreamingPreferences.LANG_ET
-                        } */
-                    }
-                    // ::onActivated must be used, as it only listens for when the index is changed by a human
-                    onActivated : {
-                        // Retranslating is expensive, so only do it if the language actually changed
-                        var new_language = languageListModel.get(currentIndex).val
-                        if (StreamingPreferences.language !== new_language) {
-                            StreamingPreferences.language = languageListModel.get(currentIndex).val
-                            if (!StreamingPreferences.retranslate()) {
-                                ToolTip.show(qsTr("You must restart Moonlight for this change to take effect"), 5000)
-                            }
-                            else {
-                                // Force the back operation to pop any AppView pages that exist.
-                                // The AppView stops working after retranslate() for some reason.
-                                window.clearOnBack = true
-
-                                // Signal other controls to adjust their text
-                                languageChanged()
-                            }
-                        }
-                    }
-                }
-
-                Label {
-                    width: parent.width
-                    id: uiDisplayModeTitle
-                    text: qsTr("GUI display mode")
-                    font.pointSize: 12
-                    wrapMode: Text.Wrap
-                    visible: SystemProperties.hasDesktopEnvironment
-                }
-
-                AutoResizingComboBox {
-                    // ignore setting the index at first, and actually set it when the component is loaded
-                    Component.onCompleted: {
-                        if (!visible) {
-                            // Do nothing if the control won't even be visible
-                            return
-                        }
-
-                        var saved_uidisplaymode = StreamingPreferences.uiDisplayMode
-                        currentIndex = 0
-                        for (var i = 0; i < uiDisplayModeListModel.count; i++) {
-                            var el_uidisplaymode = uiDisplayModeListModel.get(i).val;
-                            if (saved_uidisplaymode === el_uidisplaymode) {
-                                currentIndex = i
-                                break
-                            }
-                        }
-
-                        activated(currentIndex)
-                    }
-
-                    id: uiDisplayModeComboBox
-                    visible: SystemProperties.hasDesktopEnvironment
-                    textRole: "text"
-                    model: ListModel {
-                        id: uiDisplayModeListModel
-                        ListElement {
-                            text: qsTr("Windowed")
-                            val: StreamingPreferences.UI_WINDOWED
-                        }
-                        ListElement {
-                            text: qsTr("Maximized")
-                            val: StreamingPreferences.UI_MAXIMIZED
-                        }   
-                        ListElement {
-                            text: qsTr("Fullscreen")
-                            val: StreamingPreferences.UI_FULLSCREEN
-                        }
-                    }
-                    // ::onActivated must be used, as it only listens for when the index is changed by a human
-                    onActivated : {
-                        StreamingPreferences.uiDisplayMode = uiDisplayModeListModel.get(currentIndex).val
-                    }
-                }
-
-                CheckBox {
-                    id: connectionWarningsCheck
-                    width: parent.width
-                    text: qsTr("Show connection quality warnings")
-                    font.pointSize: 12
-                    checked: StreamingPreferences.connectionWarnings
-                    onCheckedChanged: {
-                        StreamingPreferences.connectionWarnings = checked
-                    }
-                }
-
-                CheckBox {
-                    visible: SystemProperties.hasDiscordIntegration
-                    id: discordPresenceCheck
-                    width: parent.width
-                    text: qsTr("Discord Rich Presence integration")
-                    font.pointSize: 12
-                    checked: StreamingPreferences.richPresence
-                    onCheckedChanged: {
-                        StreamingPreferences.richPresence = checked
-                    }
-
-                    ToolTip.delay: 1000
-                    ToolTip.timeout: 5000
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Updates your Discord status to display the name of the game you're streaming.")
-                }
-
-                CheckBox {
-                    id: keepAwakeCheck
-                    width: parent.width
-                    text: qsTr("Keep the display awake while streaming")
-                    font.pointSize: 12
-                    checked: StreamingPreferences.keepAwake
-                    onCheckedChanged: {
-                        StreamingPreferences.keepAwake = checked
-                    }
-
-                    ToolTip.delay: 1000
-                    ToolTip.timeout: 5000
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Prevents the screensaver from starting or the display from going to sleep while streaming.")
-                }
-            }
-        }
     }
 
     Column {
@@ -1387,6 +1498,44 @@ Flickable {
                     onCheckedChanged: {
                         StreamingPreferences.reverseScrollDirection = checked
                     }
+                }
+                Label {
+                    width: parent.width
+                    id: voiceTitle
+                    text: qsTr("Voice Settings")
+                    font.pointSize: 12
+                    wrapMode: Text.Wrap
+                }
+                CheckBox {
+                    id: enbaleMicrophoneButtonsCheck
+                    hoverEnabled: true
+                    width: parent.width
+                    text: qsTr("Enable local microphone transmission")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.enableMicrophone
+                    onCheckedChanged: {
+                        StreamingPreferences.enableMicrophone = checked
+                    }
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("When checked, enabled local microphone data transmission to remote hosts.")
+                }
+
+                CheckBox {
+                    id: microphoneMuteOnFocusLossButtonsCheck
+                    hoverEnabled: true
+                    width: parent.width
+                    text: qsTr("Allow microphone mute when window loses focus")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.microphoneMuteOnFocusLoss
+                    onCheckedChanged: {
+                        StreamingPreferences.microphoneMuteOnFocusLoss = checked
+                    }
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("When checked,allow stopping the transmission of local microphone data to the remote host when the window loses focus.")
                 }
             }
         }
@@ -1616,11 +1765,13 @@ Flickable {
                         // This is called on init, so only reset to default bitrate when checked state changes.
                         if (StreamingPreferences.enableYUV444 != checked) {
                             StreamingPreferences.enableYUV444 = checked
-                            StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
-                                                                                                      StreamingPreferences.height,
-                                                                                                      StreamingPreferences.fps,
-                                                                                                      StreamingPreferences.enableYUV444);
-                            slider.value = StreamingPreferences.bitrateKbps
+                            if (StreamingPreferences.autoAdjustBitrate) {
+                                StreamingPreferences.bitrateKbps = StreamingPreferences.getDefaultBitrate(StreamingPreferences.width,
+                                                                                                          StreamingPreferences.height,
+                                                                                                          StreamingPreferences.fps,
+                                                                                                          StreamingPreferences.enableYUV444);
+                                slider.value = StreamingPreferences.bitrateKbps
+                            }
                         }
                     }
 

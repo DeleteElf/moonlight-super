@@ -1,7 +1,7 @@
 #include "input.h"
 
 #include <Limelight.h>
-#include <SDL.h>
+#include "SDL_compat.h"
 #include <SDL_syswm.h>
 #include "streaming/streamutils.h"
 
@@ -28,7 +28,7 @@ Uint32 SdlInputHandler::longPressTimerCallback(Uint32, void*)
     return 0;
 }
 
-void SdlInputHandler::disableTouchFeedback()
+void SdlInputHandler::disableTouchFeedback(SDL_Window* m_Window)
 {
     SDL_SysWMinfo info;
 
@@ -62,7 +62,7 @@ void SdlInputHandler::disableTouchFeedback()
 #endif
 }
 
-void SdlInputHandler::handleAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
+void SdlInputHandler::handleAbsoluteFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event,short displayIndex)
 {
     SDL_Rect src, dst;
     int windowWidth, windowHeight;
@@ -142,16 +142,16 @@ void SdlInputHandler::handleAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
 
         if (!m_DisabledTouchFeedback) {
             // Disable touch feedback when passing touch natively
-            disableTouchFeedback();
+            disableTouchFeedback(m_Window);
             m_DisabledTouchFeedback = true;
         }
     }
     else {
-        emulateAbsoluteFingerEvent(event);
+        emulateAbsoluteFingerEvent(m_Window,event,displayIndex);
     }
 }
 
-void SdlInputHandler::emulateAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
+void SdlInputHandler::emulateAbsoluteFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event,short displayIndex)
 {
     // Observations on Windows 10: x and y appear to be relative to 0,0 of the window client area.
     // Although SDL documentation states they are 0.0 - 1.0 float values, they can actually be higher
@@ -200,7 +200,7 @@ void SdlInputHandler::emulateAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
         short y = qMin(qMax((int)(event->y * windowHeight), dst.y), dst.y + dst.h);
 
         // Update the cursor position relative to the video region
-        LiSendMousePositionEvent(x - dst.x, y - dst.y, dst.w, dst.h);
+        LiSendMousePositionEvent(displayIndex,x - dst.x, y - dst.y, dst.w, dst.h);
     }
 
     if (event->type == SDL_FINGERDOWN) {

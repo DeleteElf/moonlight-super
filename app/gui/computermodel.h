@@ -45,6 +45,9 @@ public:
 
     Q_INVOKABLE Session* createSessionForCurrentGame(int computerIndex);
 
+    Q_INVOKABLE bool checkServerConfig(int computerIndex,  QString username,QString pwd);
+    Q_INVOKABLE bool registePinToServer(int computerIndex,  QString username,QString pwd,QString pin,QString name);
+
 signals:
     void pairingCompleted(QVariant error);
     void connectionTestCompleted(int result, QString blockedPorts);

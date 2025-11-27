@@ -1,5 +1,5 @@
 #include <Limelight.h>
-#include <SDL.h>
+#include "SDL_compat.h"
 #include "streaming/session.h"
 #include "settings/mappingmanager.h"
 #include "path.h"
@@ -50,7 +50,7 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
 #endif
 
     // Opt-out of SDL's built-in Alt+Tab handling while keyboard grab is enabled
-    SDL_SetHint("SDL_ALLOW_ALT_TAB_WHILE_GRABBED", "0");
+    SDL_SetHint(SDL_HINT_ALLOW_ALT_TAB_WHILE_GRABBED, "0");
 
     // Allow clicks to pass through to us when focusing the window. If we're in
     // absolute mouse mode, this will avoid the user having to click twice to
@@ -62,8 +62,8 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
     // controllers, but breaks DirectInput applications. We will enable it because
     // it's likely that working rumble is what the user is expecting. If they don't
     // want this behavior, they can override it with the environment variable.
-    SDL_SetHint("SDL_JOYSTICK_HIDAPI_PS4_RUMBLE", "1");
-    SDL_SetHint("SDL_JOYSTICK_HIDAPI_PS5_RUMBLE", "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
 
     // Populate special key combo configuration
     m_SpecialKeyCombos[KeyComboQuit].keyCombo = KeyComboQuit;
@@ -110,6 +110,11 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
     m_SpecialKeyCombos[KeyComboTogglePointerRegionLock].keyCode = SDLK_l;
     m_SpecialKeyCombos[KeyComboTogglePointerRegionLock].scanCode = SDL_SCANCODE_L;
     m_SpecialKeyCombos[KeyComboTogglePointerRegionLock].enabled = true;
+
+    m_SpecialKeyCombos[KeyComboQuitAndExit].keyCombo = KeyComboQuitAndExit;
+    m_SpecialKeyCombos[KeyComboQuitAndExit].keyCode = SDLK_e;
+    m_SpecialKeyCombos[KeyComboQuitAndExit].scanCode = SDL_SCANCODE_E;
+    m_SpecialKeyCombos[KeyComboQuitAndExit].enabled = true;
 
     m_OldIgnoreDevices = SDL_GetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES);
     m_OldIgnoreDevicesExcept = SDL_GetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT);
@@ -196,7 +201,7 @@ SdlInputHandler::~SdlInputHandler()
 {
     for (int i = 0; i < MAX_GAMEPADS; i++) {
         if (m_GamepadState[i].mouseEmulationTimer != 0) {
-            Session::get()->notifyMouseEmulationMode(false);
+            Session::get()->getActiveWindow()->notifyMouseEmulationMode(false);
             SDL_RemoveTimer(m_GamepadState[i].mouseEmulationTimer);
         }
 #if !SDL_VERSION_ATLEAST(2, 0, 9)
@@ -241,25 +246,15 @@ SdlInputHandler::~SdlInputHandler()
 #endif
 }
 
-void SdlInputHandler::setWindow(SDL_Window *window)
-{
-    m_Window = window;
-}
-
-void SdlInputHandler::raiseAllKeys()
+void SdlInputHandler::raiseAllKeys(short displayIndex)
 {
     if (m_KeysDown.isEmpty()) {
         return;
     }
-
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "Raising %d keys",
-                (int)m_KeysDown.count());
-
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Raising %d keys",(int)m_KeysDown.count());
     for (auto keyDown : m_KeysDown) {
-        LiSendKeyboardEvent(keyDown, KEY_ACTION_UP, 0);
+        LiSendKeyboardEvent(keyDown, KEY_ACTION_UP, 0,displayIndex);
     }
-
     m_KeysDown.clear();
 }
 
@@ -283,19 +278,19 @@ void SdlInputHandler::notifyMouseLeave()
     }
 }
 
-void SdlInputHandler::notifyFocusLost()
+void SdlInputHandler::notifyFocusLost(SDL_Window* m_Window,short displayIndex)
 {
     // Release mouse cursor when another window is activated (e.g. by using ALT+TAB).
     // This lets user to interact with our window's title bar and with the buttons in it.
     // Doing this while the window is full-screen breaks the transition out of FS
     // (desktop and exclusive), so we must check for that before releasing mouse capture.
     if (!(SDL_GetWindowFlags(m_Window) & SDL_WINDOW_FULLSCREEN) && !m_AbsoluteMouseMode) {
-        setCaptureActive(false);
+        setCaptureActive(m_Window,false,-1);
     }
 
     // Raise all keys that are currently pressed. If we don't do this, certain keys
     // used in shortcuts that cause focus loss (such as Alt+Tab) may get stuck down.
-    raiseAllKeys();
+    raiseAllKeys(displayIndex);
 }
 
 bool SdlInputHandler::isCaptureActive()
@@ -308,7 +303,7 @@ bool SdlInputHandler::isCaptureActive()
     return m_FakeCaptureActive;
 }
 
-void SdlInputHandler::updateKeyboardGrabState()
+void SdlInputHandler::updateKeyboardGrabState(SDL_Window* m_Window)
 {
     if (m_CaptureSystemKeysMode == StreamingPreferences::CSK_OFF) {
         return;
@@ -332,7 +327,7 @@ void SdlInputHandler::updateKeyboardGrabState()
 #endif
 }
 
-bool SdlInputHandler::isSystemKeyCaptureActive()
+bool SdlInputHandler::isSystemKeyCaptureActive(SDL_Window* m_Window)
 {
     if (m_CaptureSystemKeysMode == StreamingPreferences::CSK_OFF) {
         return false;
@@ -362,18 +357,21 @@ bool SdlInputHandler::isSystemKeyCaptureActive()
     return true;
 }
 
-void SdlInputHandler::setCaptureActive(bool active)
+void SdlInputHandler::setCaptureActive(SDL_Window* m_Window,bool active,short displayIndex)
 {
     if (active) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"=====> 激活窗口");
         // If we're in relative mode, try to activate SDL's relative mouse mode
         if (m_AbsoluteMouseMode || SDL_SetRelativeMouseMode(SDL_TRUE) < 0) {
             // Relative mouse mode didn't work or was disabled, so we'll just hide the cursor
             SDL_ShowCursor(m_MouseCursorCapturedVisibilityState);
             m_FakeCaptureActive = true;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"=====> 显示鼠标！");
         }
 
         // Synchronize the client and host cursor when activating absolute capture
         if (m_AbsoluteMouseMode) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"=====> 同步鼠标");
             int mouseX, mouseY;
             int windowX, windowY;
 
@@ -386,7 +384,7 @@ void SdlInputHandler::setCaptureActive(bool active)
             mouseX -= windowX;
             mouseY -= windowY;
 
-            if (isMouseInVideoRegion(mouseX, mouseY)) {
+            if (isMouseInVideoRegion(m_Window,mouseX, mouseY)) {
                 // Synthesize a mouse event to synchronize the cursor
                 SDL_MouseMotionEvent motionEvent = {};
                 motionEvent.type = SDL_MOUSEMOTION;
@@ -394,29 +392,30 @@ void SdlInputHandler::setCaptureActive(bool active)
                 motionEvent.windowID = SDL_GetWindowID(m_Window);
                 motionEvent.x = mouseX;
                 motionEvent.y = mouseY;
-                handleMouseMotionEvent(&motionEvent);
+                handleMouseMotionEvent(m_Window,&motionEvent,displayIndex);
             }
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"=====> 同步鼠标结束");
         }
     }
     else {
         if (m_FakeCaptureActive) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"=====> 显示鼠标");
             // Display the cursor again
             SDL_ShowCursor(SDL_ENABLE);
             m_FakeCaptureActive = false;
         }
         else {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"=====> 鼠标相对模式");
             SDL_SetRelativeMouseMode(SDL_FALSE);
         }
     }
-
     // Update mouse pointer region constraints
-    updatePointerRegionLock();
-
+    updatePointerRegionLock(m_Window);
     // Now update the keyboard grab
-    updateKeyboardGrabState();
+    updateKeyboardGrabState(m_Window);
 }
 
-void SdlInputHandler::handleTouchFingerEvent(SDL_TouchFingerEvent* event)
+void SdlInputHandler::handleTouchFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event,short displayIndex)
 {
 #if SDL_VERSION_ATLEAST(2, 0, 10)
     if (SDL_GetTouchDeviceType(event->touchId) != SDL_TOUCH_DEVICE_DIRECT) {
@@ -434,9 +433,9 @@ void SdlInputHandler::handleTouchFingerEvent(SDL_TouchFingerEvent* event)
 #endif
 
     if (m_AbsoluteTouchMode) {
-        handleAbsoluteFingerEvent(event);
+        handleAbsoluteFingerEvent(m_Window,event,displayIndex);
     }
     else {
-        handleRelativeFingerEvent(event);
+        handleRelativeFingerEvent(m_Window,event);
     }
 }

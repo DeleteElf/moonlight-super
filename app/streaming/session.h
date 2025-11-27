@@ -2,7 +2,7 @@
 
 #include <QSemaphore>
 #include <QWindow>
-
+#include "renderwindow.h"
 #include <Limelight.h>
 #include <opus_multistream.h>
 #include "settings/streamingpreferences.h"
@@ -10,6 +10,10 @@
 #include "video/decoder.h"
 #include "audio/renderers/renderer.h"
 #include "video/overlaymanager.h"
+
+#include "microphone.h"
+
+class RenderWindow;
 
 class SupportedVideoFormatList : public QList<int>
 {
@@ -25,8 +29,7 @@ public:
         return value;
     }
 
-    void
-    removeByMask(int mask)
+    void removeByMask(int mask)
     {
         int i = 0;
         while (i < this->length()) {
@@ -39,8 +42,7 @@ public:
         }
     }
 
-    void
-    deprioritizeByMask(int mask)
+    void deprioritizeByMask(int mask)
     {
         QList<int> deprioritizedList;
 
@@ -97,8 +99,9 @@ class Session : public QObject
     friend class DeferredSessionCleanupTask;
     friend class AsyncConnectionStartThread;
     friend class ExecThread;
-
+    friend class RenderWindow;
 public:
+
     explicit Session(NvComputer* computer, NvApp& app, StreamingPreferences *preferences = nullptr);
 
     // NB: This may not get destroyed for a long time! Don't put any cleanup here.
@@ -107,8 +110,7 @@ public:
 
     Q_INVOKABLE void exec(QWindow* qtWindow);
 
-    static
-    void getDecoderInfo(SDL_Window* window,
+    static void getDecoderInfo(SDL_Window* window,
                         bool& isHardwareAccelerated, bool& isFullScreenOnly,
                         bool& isHdrSupported, QSize& maxResolution);
 
@@ -122,7 +124,9 @@ public:
         return m_OverlayManager;
     }
 
-    void flushWindowEvents();
+    void flushWindowEvents(SDL_Window* window);
+
+    void setShouldExitAfterQuit();
 
 signals:
     void stageStarting(QString stage);
@@ -163,14 +167,14 @@ private:
 
     int getAudioRendererCapabilities(int audioConfiguration);
 
-    void getWindowDimensions(int& x, int& y,
+    void getWindowDimensions(int displayIndex,int& x, int& y,
                              int& width, int& height);
 
-    void toggleFullscreen();
+    // void toggleFullscreen(int displayIndex=0);
 
-    void notifyMouseEmulationMode(bool enabled);
+    // void notifyMouseEmulationMode(bool enabled);
 
-    void updateOptimalWindowDisplayMode();
+    // void updateOptimalWindowDisplayMode();
 
     enum class DecoderAvailability {
         None,
@@ -178,67 +182,52 @@ private:
         Hardware
     };
 
-    static
-    DecoderAvailability getDecoderAvailability(SDL_Window* window,
+    static DecoderAvailability getDecoderAvailability(SDL_Window* window,
                                                StreamingPreferences::VideoDecoderSelection vds,
                                                int videoFormat, int width, int height, int frameRate);
-
-    static
-    bool chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
+public:
+    static bool chooseDecoder(StreamingPreferences::VideoDecoderSelection vds,
                        SDL_Window* window, int videoFormat, int width, int height,
                        int frameRate, bool enableVsync, bool enableFramePacing,
                        bool testOnly,
-                       IVideoDecoder*& chosenDecoder);
+                       IVideoDecoder*& chosenDecoder,int displayIndex=0);
+private:
+    static void clStageStarting(int stage);
 
-    static
-    void clStageStarting(int stage);
+    static void clStageFailed(int stage, int errorCode);
 
-    static
-    void clStageFailed(int stage, int errorCode);
+    static void clConnectionTerminated(int errorCode);
 
-    static
-    void clConnectionTerminated(int errorCode);
+    static void clLogMessage(const char* format, ...);
 
-    static
-    void clLogMessage(const char* format, ...);
+    static void clRumble(unsigned short controllerNumber, unsigned short lowFreqMotor, unsigned short highFreqMotor);
 
-    static
-    void clRumble(unsigned short controllerNumber, unsigned short lowFreqMotor, unsigned short highFreqMotor);
+    static void clConnectionStatusUpdate(int connectionStatus);
 
-    static
-    void clConnectionStatusUpdate(int connectionStatus);
+    static void clSetHdrMode(bool enabled);
 
-    static
-    void clSetHdrMode(bool enabled);
+    static void clRumbleTriggers(uint16_t controllerNumber, uint16_t leftTrigger, uint16_t rightTrigger);
 
-    static
-    void clRumbleTriggers(uint16_t controllerNumber, uint16_t leftTrigger, uint16_t rightTrigger);
+    static void clSetMotionEventState(uint16_t controllerNumber, uint8_t motionType, uint16_t reportRateHz);
 
-    static
-    void clSetMotionEventState(uint16_t controllerNumber, uint8_t motionType, uint16_t reportRateHz);
+    static void clSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b);
 
-    static
-    void clSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b);
+    static void clSetAdaptiveTriggers(uint16_t controllerNumber, uint8_t eventFlags, uint8_t typeLeft, uint8_t typeRight, uint8_t *left, uint8_t *right);
 
-    static
-    int arInit(int audioConfiguration,
+    static int arInit(int audioConfiguration,
                const POPUS_MULTISTREAM_CONFIGURATION opusConfig,
                void* arContext, int arFlags);
 
-    static
-    void arCleanup();
+    static void arCleanup();
 
-    static
-    void arDecodeAndPlaySample(char* sampleData, int sampleLength);
+    static void arDecodeAndPlaySample(char* sampleData, int sampleLength);
 
-    static
-    int drSetup(int videoFormat, int width, int height, int frameRate, void*, int);
+    static int drSetup(int videoFormat, int width, int height, int frameRate, void*, int);
 
-    static
-    void drCleanup();
+    static void drCleanup();
 
-    static
-    int drSubmitDecodeUnit(PDECODE_UNIT du);
+    static int drSubmitDecodeUnit(PDECODE_UNIT du);
+
 
     StreamingPreferences* m_Preferences;
     bool m_IsFullScreen;
@@ -248,9 +237,9 @@ private:
     AUDIO_RENDERER_CALLBACKS m_AudioCallbacks;
     NvComputer* m_Computer;
     NvApp m_App;
-    SDL_Window* m_Window;
-    IVideoDecoder* m_VideoDecoder;
-    SDL_SpinLock m_DecoderLock;
+    // SDL_Window* m_Window;
+    // IVideoDecoder* m_VideoDecoder;
+    // SDL_SpinLock m_DecoderLock;
     bool m_AudioDisabled;
     bool m_AudioMuted;
     Uint32 m_FullScreenFlag;
@@ -259,7 +248,9 @@ private:
     bool m_UnexpectedTermination;
     SdlInputHandler* m_InputHandler;
     int m_MouseEmulationRefCount;
-    int m_FlushingWindowEventsRef;
+    std::map<int,int> m_FlushingWindowEventsRefs;
+    QList<QString> m_LaunchWarnings;
+    bool m_ShouldExitAfterQuit;
 
     bool m_AsyncConnectionSuccess;
     int m_PortTestResults;
@@ -281,4 +272,32 @@ private:
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;
     static QSemaphore s_ActiveSessionSemaphore;
+//============================= 以下为陈浩新增的内容 202508 ===================================
+    /**
+     * @brief getActiveWindow 获取当前激活的窗口
+     * @return
+     */
+    RenderWindow* getActiveWindow(){
+        return m_activeWindow;
+    }
+    /**
+     * @brief handleEvents 处理会话内的所有窗口事件
+     */
+    void handleEvents();
+    /**
+     * @brief close 会话关闭
+     */
+    void close();
+
+    RenderWindow* m_activeWindow;
+    std::vector<std::unique_ptr<RenderWindow>> m_Windows;
+    bool m_enableMicrophone;
+    audio::Microphone* microphone;
+    bool m_needResumeService;
+public:
+    /**
+     * 执行会话清理任务
+     * @brief startSessionCleanupTask
+     */
+    void startSessionCleanupTask();
 };

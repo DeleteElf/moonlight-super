@@ -5,7 +5,7 @@ import QtQuick.Window 2.2
 import QtQuick.Controls.Material 2.2
 
 import ComputerManager 1.0
-import AutoUpdateChecker 1.0
+// import AutoUpdateChecker 1.0
 import StreamingPreferences 1.0
 import SystemProperties 1.0
 import SdlGamepadKeyNavigation 1.0
@@ -22,7 +22,8 @@ ApplicationWindow {
     width: 1280
     height: 600
 
-    Component.onCompleted: {
+    // This function runs prior to creation of the initial StackView item
+    function doEarlyInit() {
         // Override the background color to Material 2 colors for Qt 6.5+
         // in order to improve contrast between GFE's placeholder box art
         // and the background of the app grid.
@@ -30,6 +31,10 @@ ApplicationWindow {
             Material.background = "#303030"
         }
 
+        SdlGamepadKeyNavigation.enable()
+    }
+
+    Component.onCompleted: {
         // Show the window according to the user's preferences
         if (SystemProperties.hasDesktopEnvironment) {
             if (StreamingPreferences.uiDisplayMode == StreamingPreferences.UI_MAXIMIZED) {
@@ -49,7 +54,7 @@ ApplicationWindow {
         if (SystemProperties.isWow64) {
             wow64Dialog.open()
         }
-        else if (!SystemProperties.hasHardwareAcceleration) {
+        else if (!SystemProperties.hasHardwareAcceleration && StreamingPreferences.videoDecoderSelection !== StreamingPreferences.VDS_FORCE_SOFTWARE) {
             if (SystemProperties.isRunningXWayland) {
                 xWaylandDialog.open()
             }
@@ -64,9 +69,19 @@ ApplicationWindow {
         }
     }
   
+    // It would be better to use TextMetrics here, but it always lays out
+    // the text slightly more compactly than real Text does in ToolTip,
+    // causing unexpected line breaks to be inserted
+    Text {
+        id: tooltipTextLayoutHelper
+        visible: false
+        font: ToolTip.toolTip.font
+        text: ToolTip.toolTip.text
+    }
+
     // This configures the maximum width of the singleton attached QML ToolTip. If left unconstrained,
     // it will never insert a line break and just extend on forever.
-    ToolTip.toolTip.contentWidth: ToolTip.toolTip.implicitContentWidth < 400 ? ToolTip.toolTip.implicitContentWidth : 400
+    ToolTip.toolTip.contentWidth: Math.min(tooltipTextLayoutHelper.width, 400)
 
     function goBack() {
         if (clearOnBack) {
@@ -81,9 +96,15 @@ ApplicationWindow {
 
     StackView {
         id: stackView
-        initialItem: initialView
         anchors.fill: parent
         focus: true
+
+        Component.onCompleted: {
+            // Perform our early initialization before constructing
+            // the initial view and pushing it to the StackView
+            doEarlyInit()
+            push(initialView)
+        }
 
         onCurrentItemChanged: {
             // Ensure focus travels to the next view when going back
@@ -158,6 +179,9 @@ ApplicationWindow {
                 pollingActive = true
             }
         }
+
+        // Poll for gamepad input only when the window is in focus
+        SdlGamepadKeyNavigation.notifyWindowFocus(visible && active)
     }
 
     onActiveChanged: {
@@ -176,6 +200,9 @@ ApplicationWindow {
             // if focus does not return within a few minutes.
             inactivityTimer.restart()
         }
+
+        // Poll for gamepad input only when the window is in focus
+        SdlGamepadKeyNavigation.notifyWindowFocus(visible && active)
     }
 
     // Workaround for lack of instanceof in Qt 5.9.
@@ -209,7 +236,9 @@ ApplicationWindow {
         height: 60
         anchors.topMargin: 5
         anchors.bottomMargin: 5
-
+        background: Rectangle {
+            color: "#3688FF" // 设置你想要的颜色
+        }
         Label {
             id: titleLabel
             visible: toolBar.width > 700
@@ -255,35 +284,36 @@ ApplicationWindow {
                 // just set the text to empty string.
                 text: !titleLabel.visible ? stackView.currentItem.objectName : ""
             }
+            //版本号
+            // Label {
+            //     id: versionLabel
+            //     visible: qmltypeof(stackView.currentItem, "SettingsView")
+            //     text: qsTr("Version %1").arg(SystemProperties.versionString)
+            //     font.pointSize: 12
+            //     horizontalAlignment: Qt.AlignRight
+            //     verticalAlignment: Qt.AlignVCenter
+            // }
 
-            Label {
-                id: versionLabel
-                visible: qmltypeof(stackView.currentItem, "SettingsView")
-                text: qsTr("Version %1").arg(SystemProperties.versionString)
-                font.pointSize: 12
-                horizontalAlignment: Qt.AlignRight
-                verticalAlignment: Qt.AlignVCenter
-            }
+            // 建议
+            // NavigableToolButton {
+            //     id: discordButton
+            //     visible: SystemProperties.hasBrowser &&
+            //              qmltypeof(stackView.currentItem, "SettingsView")
 
-            NavigableToolButton {
-                id: discordButton
-                visible: SystemProperties.hasBrowser &&
-                         qmltypeof(stackView.currentItem, "SettingsView")
+            //     iconSource: "qrc:/res/discord.svg"
 
-                iconSource: "qrc:/res/discord.svg"
+            //     ToolTip.delay: 1000
+            //     ToolTip.timeout: 3000
+            //     ToolTip.visible: hovered
+            //     ToolTip.text: qsTr("Join our community on Discord")
 
-                ToolTip.delay: 1000
-                ToolTip.timeout: 3000
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("Join our community on Discord")
+            //     // TODO need to make sure browser is brought to foreground.
+            //     onClicked: Qt.openUrlExternally("https://moonlight-stream.org/discord");
 
-                // TODO need to make sure browser is brought to foreground.
-                onClicked: Qt.openUrlExternally("https://moonlight-stream.org/discord");
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
-            }
+            //     Keys.onDownPressed: {
+            //         stackView.currentItem.forceActiveFocus(Qt.TabFocus)
+            //     }
+            // }
 
             NavigableToolButton {
                 id: addPcButton
@@ -311,68 +341,106 @@ ApplicationWindow {
                 }
             }
 
+            //可用更新
+            // NavigableToolButton {
+            //     property string browserUrl: ""
+            //
+            //     id: updateButton
+            //
+            //     iconSource: "qrc:/res/update.svg"
+            //
+            //     ToolTip.delay: 1000
+            //     ToolTip.timeout: 3000
+            //     ToolTip.visible: hovered || visible
+            //
+            //     // Invisible until we get a callback notifying us that
+            //     // an update is available
+            //     visible: false
+            //
+            //     onClicked: {
+            //         if (SystemProperties.hasBrowser) {
+            //             Qt.openUrlExternally(browserUrl);
+            //         }
+            //     }
+            //
+            //     function updateAvailable(version, url)
+            //     {
+            //         ToolTip.text = qsTr("Update available for Moonlight: Version %1").arg(version)
+            //         updateButton.browserUrl = url
+            //         updateButton.visible = true
+            //     }
+            //
+            //     Component.onCompleted: {
+            //         AutoUpdateChecker.onUpdateAvailable.connect(updateAvailable)
+            //         AutoUpdateChecker.start()
+            //     }
+            //
+            //     Keys.onDownPressed: {
+            //         stackView.currentItem.forceActiveFocus(Qt.TabFocus)
+            //     }
+            // }
+
+            // 刷新按钮
             NavigableToolButton {
-                property string browserUrl: ""
+                id: refreshButton
+                visible: qmltypeof(stackView.currentItem, "PcView") //仅在pcview显示时显示
 
-                id: updateButton
-
-                iconSource: "qrc:/res/update.svg"
-
-                ToolTip.delay: 1000
-                ToolTip.timeout: 3000
-                ToolTip.visible: hovered || visible
-
-                // Invisible until we get a callback notifying us that
-                // an update is available
-                visible: false
-
-                onClicked: {
-                    if (SystemProperties.hasBrowser) {
-                        Qt.openUrlExternally(browserUrl);
-                    }
-                }
-
-                function updateAvailable(version, url)
-                {
-                    ToolTip.text = qsTr("Update available for Moonlight: Version %1").arg(version)
-                    updateButton.browserUrl = url
-                    updateButton.visible = true
-                }
-
-                Component.onCompleted: {
-                    AutoUpdateChecker.onUpdateAvailable.connect(updateAvailable)
-                    AutoUpdateChecker.start()
-                }
-
-                Keys.onDownPressed: {
-                    stackView.currentItem.forceActiveFocus(Qt.TabFocus)
-                }
-            }
-
-            NavigableToolButton {
-                id: helpButton
-                visible: SystemProperties.hasBrowser
-
-                iconSource: "qrc:/res/question_mark.svg"
+                iconSource: "qrc:/res/refresh.svg"
 
                 ToolTip.delay: 1000
                 ToolTip.timeout: 3000
                 ToolTip.visible: hovered
-                ToolTip.text: qsTr("Help") + (helpShortcut.nativeText ? (" ("+helpShortcut.nativeText+")") : "")
+                ToolTip.text: qsTr("刷新计算机列表")
 
                 Shortcut {
-                    id: helpShortcut
-                    sequence: StandardKey.HelpContents
-                    onActivated: helpButton.clicked()
+                    id: refreshShortcut
+                    sequence: StandardKey.Refresh
+                    onActivated: refreshButton.clicked()
                 }
 
                 // TODO need to make sure browser is brought to foreground.
-                onClicked: Qt.openUrlExternally("https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
-
+                onClicked:{
+                    inactivityTimer.stop()
+                    if (pollingActive) {
+                        ComputerManager.stopPollingAsync()
+                        pollingActive = false
+                    }
+                    if (!pollingActive) {
+                        ComputerManager.startPolling()
+                        pollingActive = true
+                    }
+                    inactivityTimer.restart()
+                }
                 Keys.onDownPressed: {
                     stackView.currentItem.forceActiveFocus(Qt.TabFocus)
                 }
             }
+
+            //帮助按钮
+            // NavigableToolButton {
+            //     id: helpButton
+            //     visible: SystemProperties.hasBrowser
+
+            //     iconSource: "qrc:/res/question_mark.svg"
+
+            //     ToolTip.delay: 1000
+            //     ToolTip.timeout: 3000
+            //     ToolTip.visible: hovered
+            //     ToolTip.text: qsTr("Help") + (helpShortcut.nativeText ? (" ("+helpShortcut.nativeText+")") : "")
+
+            //     Shortcut {
+            //         id: helpShortcut
+            //         sequence: StandardKey.HelpContents
+            //         onActivated: helpButton.clicked()
+            //     }
+
+            //     // TODO need to make sure browser is brought to foreground.
+            //     onClicked: Qt.openUrlExternally("https://github.com/moonlight-stream/moonlight-docs/wiki/Setup-Guide");
+
+            //     Keys.onDownPressed: {
+            //         stackView.currentItem.forceActiveFocus(Qt.TabFocus)
+            //     }
+            // }
 
             NavigableToolButton {
                 // TODO: Implement gamepad mapping then unhide this button

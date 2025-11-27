@@ -13,7 +13,8 @@ extern "C" {
 }
 
 SdlRenderer::SdlRenderer()
-    : m_VideoFormat(0),
+    : IFFmpegRenderer(RendererType::SDL),
+      m_VideoFormat(0),
       m_Renderer(nullptr),
       m_Texture(nullptr),
       m_ColorSpace(-1),
@@ -185,7 +186,6 @@ bool SdlRenderer::initialize(PDECODER_PARAMETERS params)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "SDL_CreateRenderer() failed: %s",
                      SDL_GetError());
-        return false;
     }
 
     // SDL_CreateRenderer() can end up having to recreate our window (SDL_RecreateWindow())
@@ -197,12 +197,17 @@ bool SdlRenderer::initialize(PDECODER_PARAMETERS params)
     if (session != nullptr) {
         // If we get here during a session, we need to synchronize with the event loop
         // to ensure we don't drop any important events.
-        session->flushWindowEvents();
+        session->flushWindowEvents(params->window);
     }
     else {
         // If we get here prior to the start of a session, just pump and flush ourselves.
         SDL_PumpEvents();
         SDL_FlushEvent(SDL_WINDOWEVENT);
+    }
+
+    if (!m_Renderer) {
+        m_InitFailureReason = InitFailureReason::NoSoftwareSupport;
+        return false;
     }
 
 #ifdef Q_OS_WIN32

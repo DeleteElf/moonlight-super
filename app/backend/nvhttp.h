@@ -158,8 +158,7 @@ public:
     QVector<int>
     parseQuad(QString quad);
 
-    void
-    quitApp();
+    void quitApp(int display=-1);
 
     void
     startApp(QString verb,

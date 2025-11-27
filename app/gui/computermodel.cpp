@@ -1,7 +1,8 @@
 #include "computermodel.h"
 
 #include <QThreadPool>
-
+#include <QJsonDocument>
+#include <QJsonObject>
 ComputerModel::ComputerModel(QObject* object)
     : QAbstractListModel(object) {}
 
@@ -241,5 +242,53 @@ void ComputerModel::handleComputerStateChanged(NvComputer* computer)
         emit dataChanged(createIndex(index, 0), createIndex(index, 0));
     }
 }
+
+
+/**
+ * @brief ComputerModel::checkServerConfig 通过获取服务器配置来确认是否登录成功
+ * @param computerIndex
+ * @param username
+ * @param pwd
+ * @return
+ */
+bool ComputerModel::checkServerConfig(int computerIndex,  QString username,QString pwd)
+{
+    Q_ASSERT(computerIndex < m_Computers.count());
+    NvComputer* computer = m_Computers[computerIndex];
+    QString result= m_ComputerManager->httpGet(computer,"/api/config",username,pwd);
+    QJsonDocument doc=QJsonDocument::fromJson(result.toUtf8());
+    if(!doc.isNull()){
+        if(doc.isObject()){
+            QJsonObject jsonObj = doc.object();
+            return jsonObj["status"].toBool();
+        }
+    }
+    return false;
+}
+
+bool ComputerModel::registePinToServer(int computerIndex,  QString username,QString pwd,QString pin,QString name)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 暂停200毫秒
+    Q_ASSERT(computerIndex < m_Computers.count());
+    NvComputer* computer = m_Computers[computerIndex];
+    // QJsonObject requestBody= QJsonObject();
+    if(name.isEmpty()){
+        name=computer->name;
+    }
+    QJsonObject requestBody{{"pin",1},{"name",2}};
+    requestBody["pin"]=pin;
+    requestBody["name"]=name;
+    QByteArray body=QJsonDocument(requestBody).toJson( QJsonValue::JsonFormat::Compact);
+    QString result= m_ComputerManager->httpPost(computer,"/api/pin",username,pwd,body);
+    QJsonDocument doc=QJsonDocument::fromJson(result.toUtf8());
+    if(!doc.isNull()){
+        if(doc.isObject()){
+            QJsonObject jsonObj = doc.object();
+            return jsonObj["status"].toBool();
+        }
+    }
+    return false;
+}
+
 
 #include "computermodel.moc"

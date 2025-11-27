@@ -34,13 +34,8 @@ CenteredGridView {
         // Setup signals on CM
         ComputerManager.computerAddCompleted.connect(addComplete)
 
-        // This is a bit of a hack to do this here as opposed to main.qml, but
-        // we need it enabled before calling getConnectedGamepads() and PcView
-        // is never destroyed, so it should be okay.
-        SdlGamepadKeyNavigation.enable()
-
         // Highlight the first item if a gamepad is connected
-        if (currentIndex == -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
+        if (currentIndex === -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
             currentIndex = 0
         }
     }
@@ -111,32 +106,32 @@ CenteredGridView {
     model: computerModel
 
     delegate: NavigableItemDelegate {
-        width: 300; height: 320;
+        width: 300; height: 160;//每个电脑实例的宽高
         grid: pcGrid
 
         property alias pcContextMenu : pcContextMenuLoader.item
-
+        //每个电脑的样式
         Image {
             id: pcIcon
             anchors.horizontalCenter: parent.horizontalCenter
             source: "qrc:/res/desktop_windows-48px.svg"
             sourceSize {
-                width: 200
-                height: 200
+                width: 100
+                height: 100
             }
         }
-
+        //每个电脑解锁前的样式
         Image {
             // TODO: Tooltip
             id: stateIcon
             anchors.horizontalCenter: pcIcon.horizontalCenter
             anchors.verticalCenter: pcIcon.verticalCenter
-            anchors.verticalCenterOffset: !model.online ? -18 : -16
+            anchors.verticalCenterOffset: !model.online ? -9 : -8
             visible: !model.statusUnknown && (!model.online || !model.paired)
             source: !model.online ? "qrc:/res/warning_FILL1_wght300_GRAD200_opsz24.svg" : "qrc:/res/baseline-lock-24px.svg"
             sourceSize {
-                width: !model.online ? 75 : 70
-                height: !model.online ? 75 : 70
+                width: !model.online ? 37 : 35
+                height: !model.online ? 37 : 35
             }
         }
 
@@ -157,10 +152,143 @@ CenteredGridView {
             width: parent.width
             anchors.top: pcIcon.bottom
             anchors.bottom: parent.bottom
-            font.pointSize: 36
+            font.pointSize: 18
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
             elide: Text.ElideRight
+        }
+
+
+        Dialog {
+            id: loginDialog
+            title:"登录主机"
+            x: parent.width / 2 - width / 2
+            y: parent.height / 2 - height / 2
+            width: 300
+            height: 310
+            modal: true  // 如果需要模态对话框，设置为true
+            //focus: true  // 使Popup获得焦点
+            //closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside // 设置关闭策略
+            // standardButtons: Dialog.Ok | Dialog.Cancel
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 10
+                TextField {
+                   id: usernameField
+                   placeholderText: qsTr("用户名")
+                   Layout.fillWidth: true
+                }
+                TextField {
+                   id: passwordField
+                   placeholderText: qsTr("密码")
+                   echoMode: TextInput.Password
+                   Layout.fillWidth: true
+                   onAccepted: {
+                      login()
+                   }
+                }
+                TextField {
+                   id: nameField
+                   placeholderText: qsTr("注册的计算机名,留空使用本机计算机名")
+                   Layout.fillWidth: true
+                   onAccepted: {
+                      login()
+                   }
+                }
+                RowLayout{
+                    Button {
+                        id: loginButton
+                        text: "登录"
+                        Layout.fillWidth: true  // 按钮宽度填满容器
+                        Layout.preferredHeight: 50  // 明确按钮高度
+
+                        // 自定义按钮内容（文字样式）
+                        contentItem: Text {
+                            text: loginButton.text
+                            color: "white"                // 文字颜色
+                            horizontalAlignment: Text.AlignHCenter // 水平居中
+                            verticalAlignment: Text.AlignVCenter   // 垂直居中
+                        }
+                        // 自定义按钮背景
+                        background: Rectangle {
+                            radius: 5  // 圆角半径
+                            // 按钮颜色（按下时变深色）
+                            color: loginButton.down ? "#2980b9" : "#3498db"
+                        }
+                        // 点击事件处理
+                        onClicked: {
+                            login()
+                        }
+                    }
+                    Button {
+                        id: loginCancelButton
+                        text: "取消"
+                        //hovered: true
+                        Layout.fillWidth: true  // 按钮宽度填满容器
+                        //Layout.topMargin: 20
+                        Layout.preferredHeight: 50  // 明确按钮高度
+                        // 自定义按钮内容（文字样式）
+                        contentItem: Text {
+                            text: loginCancelButton.text
+                            color: "white"                // 文字颜色
+                            horizontalAlignment: Text.AlignHCenter // 水平居中
+                            verticalAlignment: Text.AlignVCenter   // 垂直居中
+                        }
+                        // 自定义按钮背景
+                        background: Rectangle {
+                            radius: 5  // 圆角半径
+                            // 按钮颜色（按下时变深色）
+                            color: loginButton.down ? "#939393" : "#939393"
+                        }
+                        // 点击事件处理
+                        onClicked: {
+                            loginDialog.close()
+                        }
+                    }
+                    ToolTip {
+                       id: loginCancelButtonTT
+                       text: "按[esc]或点击取消"
+                       delay: 500
+                       timeout: 5000
+                       visible: loginCancelButton.hovered
+                       x: loginCancelButton.x
+                       y: loginCancelButton.y -  height // 垂直居中显示
+                    }
+                }
+                // 错误提示文本
+                Text {
+                   id: errorMessage
+                   //visible: false         // 默认隐藏
+                   color: "#e74c3c"      // 红色错误提示
+                   Layout.alignment: Qt.AlignHCenter // 居中显示
+                }
+            }
+        }
+        property bool logined:true //声明一个bool
+        function login(){
+            // 非空验证
+            if(usernameField.text === "" || passwordField.text === ""){
+                errorMessage.text = "用户名和密码不能为空！"
+            } else {
+                // 此处应添加实际登录验证逻辑 我们使用 /api/config 这个api来校验账号密码是否正确，通过验证 status 是否为true
+                logined= computerModel.checkServerConfig(index,usernameField.text,passwordField.text)
+
+                if(logined){
+                    errorMessage.text =""
+                    var pin = computerModel.generatePinString() //生成pin码
+                    computerModel.pairComputer(index, pin) //向远程主机形成pin通知
+                    //todo: 使用远程后台直接完成pin匹配   这个过程需要在指定时间内完成
+                   if(!computerModel.registePinToServer(index,usernameField.text,passwordField.text,pin,nameField.text)){
+                       errorMessage.text ="pin注册失败！"
+                   }else{
+                       console.log("登录注册成功！")
+                       errorMessage.text =""
+                       loginDialog.accept()
+                   }
+                }else{
+                    errorMessage.text ="登录失败，账号或密码错误！"
+                }
+            }
         }
 
         Loader {
@@ -228,29 +356,30 @@ CenteredGridView {
         }
 
         onClicked: {
-            if (model.online) {
-                if (!model.serverSupported) {
+            if (model.online) { //设备如果在线
+                if (!model.serverSupported) { //服务器不支持 moonlight客户端
                     errorDialog.text = qsTr("The version of GeForce Experience on %1 is not supported by this build of Moonlight. You must update Moonlight to stream from %1.").arg(model.name)
                     errorDialog.helpText = ""
                     errorDialog.open()
-                }
-                else if (model.paired) {
+                }else if (model.paired) { //已经配对完成
                     // go to game view
                     var component = Qt.createComponent("AppView.qml")
                     var appView = component.createObject(stackView, {"computerIndex": index, "objectName": model.name})
                     stackView.push(appView)
+                }else { //没有配对  //todo: 我们这边需要修改成先要求输入主机账号密码
+                    if(StreamingPreferences.loginMode) {
+                        loginDialog.title = "登录主机[" + model.name + "]"
+                        loginDialog.open()
+                    }else{
+                        var pin = computerModel.generatePinString()
+                        // Kick off pairing in the background
+                        computerModel.pairComputer(index, pin)
+                        // Display the pairing dialog
+                        pairDialog.pin = pin
+                        pairDialog.open()
+                    }
                 }
-                else {
-                    var pin = computerModel.generatePinString()
-
-                    // Kick off pairing in the background
-                    computerModel.pairComputer(index, pin)
-
-                    // Display the pairing dialog
-                    pairDialog.pin = pin
-                    pairDialog.open()
-                }
-            } else if (!model.online) {
+            } else if (!model.online) { //设备如果不在线，则直接弹出右键菜单
                 // Using open() here because it may be activated by keyboard
                 pcContextMenu.open()
             }

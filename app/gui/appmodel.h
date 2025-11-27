@@ -47,6 +47,8 @@ public:
 
     virtual QHash<int, QByteArray> roleNames() const override;
 
+    Q_INVOKABLE void updateGameId(int gameId);
+
 private slots:
     void handleComputerStateChanged(NvComputer* computer);
 

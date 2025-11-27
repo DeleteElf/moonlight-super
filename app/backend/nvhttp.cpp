@@ -186,19 +186,11 @@ NvHTTP::getServerInfo(NvLogLevel logLevel, bool fastFail)
     return serverInfo;
 }
 
-void
-NvHTTP::startApp(QString verb,
-                 bool isGfe,
-                 int appId,
-                 PSTREAM_CONFIGURATION streamConfig,
-                 bool sops,
-                 bool localAudio,
-                 int gamepadMask,
-                 bool persistGameControllersOnDisconnect,
+void NvHTTP::startApp(QString verb,bool isGfe,int appId,PSTREAM_CONFIGURATION streamConfig,
+                 bool sops,bool localAudio,int gamepadMask,bool persistGameControllersOnDisconnect,
                  QString& rtspSessionUrl)
 {
     int riKeyId;
-
     memcpy(&riKeyId, streamConfig->remoteInputAesIv, sizeof(riKeyId));
     riKeyId = qFromBigEndian(riKeyId);
 
@@ -213,6 +205,7 @@ NvHTTP::startApp(QString verb,
                                    // used to use 60 here but that locked the frame rate to 60 FPS
                                    // on GFE 3.20.3. We don't need this hack for Sunshine.
                                    QString::number((streamConfig->fps > 60 && isGfe) ? 0 : streamConfig->fps)+
+                                   "x"+QString::number(streamConfig->displayCount)+  //增加的多显示器协议
                                    "&additionalStates=1&sops="+QString::number(sops ? 1 : 0)+
                                    "&rikey="+QByteArray(streamConfig->remoteInputAesKey, sizeof(streamConfig->remoteInputAesKey)).toHex()+
                                    "&rikeyid="+QString::number(riKeyId)+
@@ -235,14 +228,13 @@ NvHTTP::startApp(QString verb,
     rtspSessionUrl = getXmlString(response, "sessionUrl0");
 }
 
-void
-NvHTTP::quitApp()
+void NvHTTP::quitApp(int display)
 {
-    QString response =
-            openConnectionToString(m_BaseUrlHttps,
-                                   "cancel",
-                                   nullptr,
-                                   QUIT_TIMEOUT_MS);
+    QString queryString= nullptr;
+    if(display>=0){
+        queryString=QString("display=%1").arg(display);
+    }
+    QString response = openConnectionToString(m_BaseUrlHttps,"cancel",queryString,QUIT_TIMEOUT_MS);
 
     qInfo() << "Quit response:" << response;
 
@@ -304,8 +296,7 @@ NvHTTP::getAppList()
                 // We must have a valid app before advancing to the next one
                 if (!apps.isEmpty() && !apps.last().isInitialized()) {
                     qWarning() << "Invalid applist XML";
-                    Q_ASSERT(false);
-                    return QVector<NvApp>();
+                    throw std::runtime_error("Invalid applist XML");
                 }
                 apps.append(NvApp());
             }

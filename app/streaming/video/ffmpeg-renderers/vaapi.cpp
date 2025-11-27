@@ -1,5 +1,7 @@
 #include <QString>
 
+#include <vector>
+
 // HACK: Include before vaapi.h to prevent conflicts with Xlib.h
 #include <streaming/session.h>
 
@@ -17,7 +19,8 @@
 #include <fcntl.h>
 
 VAAPIRenderer::VAAPIRenderer(int decoderSelectionPass)
-    : m_DecoderSelectionPass(decoderSelectionPass),
+    : IFFmpegRenderer(RendererType::VAAPI),
+      m_DecoderSelectionPass(decoderSelectionPass),
       m_HwContext(nullptr),
       m_BlacklistedForDirectRendering(false),
       m_RequiresExplicitPixelFormat(false),
@@ -123,16 +126,33 @@ VAAPIRenderer::openDisplay(SDL_Window* window)
     }
 #if defined(SDL_VIDEO_DRIVER_KMSDRM) && defined(HAVE_LIBVA_DRM) && SDL_VERSION_ATLEAST(2, 0, 15)
     else if (info.subsystem == SDL_SYSWM_KMSDRM) {
-        SDL_assert(info.info.kmsdrm.drm_fd >= 0);
-
         // It's possible to enter this function several times as we're probing VA drivers.
         // Make sure to only duplicate the DRM FD the first time through.
         if (m_DrmFd < 0) {
+            // Try to get the FD that we're sharing with SDL
+            bool mustCloseFd = false;
+            int fd = StreamUtils::getDrmFdForWindow(window, &mustCloseFd);
+            if (fd < 0) {
+                // Try to open any DRM render node
+                fd = StreamUtils::getDrmFd(true);
+                if (fd < 0) {
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                 "Failed to open DRM render node: %d",
+                                 errno);
+                    return nullptr;
+                }
+            }
+
             // If the KMSDRM FD is not a render node FD, open the render node for libva to use.
             // Since libva 2.20, using a primary node will fail in vaGetDriverNames().
-            if (drmGetNodeTypeFromFd(info.info.kmsdrm.drm_fd) != DRM_NODE_RENDER) {
-                char* renderNodePath = drmGetRenderDeviceNameFromFd(info.info.kmsdrm.drm_fd);
+            if (drmGetNodeTypeFromFd(fd) != DRM_NODE_RENDER) {
+                char* renderNodePath = drmGetRenderDeviceNameFromFd(fd);
                 if (renderNodePath) {
+                    // Don't need the primary node FD anymore
+                    if (mustCloseFd) {
+                        close(fd);
+                    }
+
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Opening render node for VAAPI: %s",
                                 renderNodePath);
@@ -148,13 +168,13 @@ VAAPIRenderer::openDisplay(SDL_Window* window)
                 else {
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                                 "Failed to get render node path. Using the SDL FD directly.");
-                    m_DrmFd = dup(info.info.kmsdrm.drm_fd);
+                    m_DrmFd = mustCloseFd ? fd : dup(fd);
                 }
             }
             else {
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                             "KMSDRM FD is already a render node. Using the SDL FD directly.");
-                m_DrmFd = dup(info.info.kmsdrm.drm_fd);
+                m_DrmFd = mustCloseFd ? fd : dup(fd);
             }
         }
 
@@ -349,6 +369,7 @@ VAAPIRenderer::initialize(PDECODER_PARAMETERS params)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "Failed to initialize VAAPI: %d",
                      status);
+        m_InitFailureReason = InitFailureReason::NoSoftwareSupport;
         return false;
     }
 
@@ -367,6 +388,7 @@ VAAPIRenderer::initialize(PDECODER_PARAMETERS params)
         // Fail and let our VDPAU renderer pick this up
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "Avoiding VDPAU wrapper for VAAPI decoding");
+        m_InitFailureReason = InitFailureReason::NoSoftwareSupport;
         return false;
     }
 
@@ -415,6 +437,7 @@ VAAPIRenderer::initialize(PDECODER_PARAMETERS params)
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "Failed to initialize VAAPI context: %d",
                      err);
+        m_InitFailureReason = InitFailureReason::NoSoftwareSupport;
         return false;
     }
 
@@ -556,9 +579,9 @@ VAAPIRenderer::isDirectRenderingSupported()
 
     AVHWDeviceContext* deviceContext = (AVHWDeviceContext*)m_HwContext->data;
     AVVAAPIDeviceContext* vaDeviceContext = (AVVAAPIDeviceContext*)deviceContext->hwctx;
-    VAEntrypoint entrypoints[vaMaxNumEntrypoints(vaDeviceContext->display)];
+    std::vector<VAEntrypoint> entrypoints(vaMaxNumEntrypoints(vaDeviceContext->display));
     int entrypointCount;
-    VAStatus status = vaQueryConfigEntrypoints(vaDeviceContext->display, VAProfileNone, entrypoints, &entrypointCount);
+    VAStatus status = vaQueryConfigEntrypoints(vaDeviceContext->display, VAProfileNone, entrypoints.data(), &entrypointCount);
     if (status == VA_STATUS_SUCCESS) {
         for (int i = 0; i < entrypointCount; i++) {
             // Without VAEntrypointVideoProc support, the driver will crash inside vaPutSurface()

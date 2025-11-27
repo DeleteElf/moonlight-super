@@ -1,0 +1,1 @@
+ffmpeg -i test.opus -acodec pcm_s16le -ac 1 -ar 48000 test.wav

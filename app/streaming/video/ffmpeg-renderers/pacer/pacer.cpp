@@ -36,7 +36,8 @@ Pacer::Pacer(IFFmpegRenderer* renderer, PVIDEO_STATS videoStats) :
     m_VsyncRenderer(renderer),
     m_MaxVideoFps(0),
     m_DisplayFps(0),
-    m_VideoStats(videoStats)
+    m_VideoStats(videoStats),
+    windowId(-1) //增加窗口id
 {
 
 }
@@ -175,8 +176,8 @@ int Pacer::renderThread(void* context)
 
 void Pacer::enqueueFrameForRenderingAndUnlock(AVFrame *frame)
 {
-    dropFrameForEnqueue(m_RenderQueue);
-    m_RenderQueue.enqueue(frame);
+    dropFrameForEnqueue(m_RenderQueue); //如果队列满了，则腾出一个位置
+    m_RenderQueue.enqueue(frame); //将视频帧 放入队列
 
     m_FrameQueueLock.unlock();
 
@@ -189,12 +190,13 @@ void Pacer::enqueueFrameForRenderingAndUnlock(AVFrame *frame)
         // For main thread rendering, we'll push an event to trigger a callback
         event.type = SDL_USEREVENT;
         event.user.code = SDL_CODE_FRAME_READY;
+        event.user.windowID=windowId; //事件传递时，增加传递windowId
         SDL_PushEvent(&event);
     }
 }
 
 // Called in an arbitrary thread by the IVsyncSource on V-sync
-// or an event synchronized with V-sync
+// or an event synchronized with V-sync 垂直同步
 void Pacer::handleVsync(int timeUntilNextVsyncMillis)
 {
     // Make sure initialize() has been called
@@ -256,12 +258,13 @@ void Pacer::handleVsync(int timeUntilNextVsyncMillis)
     enqueueFrameForRenderingAndUnlock(m_PacingQueue.dequeue());
 }
 
-bool Pacer::initialize(SDL_Window* window, int maxVideoFps, bool enablePacing)
+bool Pacer::initialize(SDL_Window* window, int maxVideoFps, bool enablePacing,int trackIndex)
 {
     m_MaxVideoFps = maxVideoFps;
     m_DisplayFps = StreamUtils::getDisplayRefreshRate(window);
     m_RendererAttributes = m_VsyncRenderer->getRendererAttributes();
-
+    windowId=SDL_GetWindowID(window);
+    this->trackIndex=trackIndex;
     if (enablePacing) {
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Frame pacing: target %d Hz with %d FPS stream",

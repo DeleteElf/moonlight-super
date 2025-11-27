@@ -38,7 +38,7 @@ CenteredGridView {
         activated = true
 
         // Highlight the first item if a gamepad is connected
-        if (currentIndex == -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
+        if (currentIndex === -1 && SdlGamepadKeyNavigation.getConnectedGamepads() > 0) {
             currentIndex = 0
         }
 
@@ -94,9 +94,9 @@ CenteredGridView {
                 // the image size checks if this is not an app collector game. We know the officially
                 // supported games all have box art, so this check is not required.
                 if (!model.isAppCollectorGame &&
-                    ((sourceSize.width == 130 && sourceSize.height == 180) || // GFE 2.0 placeholder image
-                     (sourceSize.width == 628 && sourceSize.height == 888) || // GFE 3.0 placeholder image
-                     (sourceSize.width == 200 && sourceSize.height == 266)))  // Our no_app_image.png
+                    ((sourceSize.width === 130 && sourceSize.height === 180) || // GFE 2.0 placeholder image
+                     (sourceSize.width === 628 && sourceSize.height === 888) || // GFE 3.0 placeholder image
+                     (sourceSize.width === 200 && sourceSize.height === 266)))  // Our no_app_image.png
                 {
                     isPlaceholder = true
                 }
@@ -224,9 +224,11 @@ CenteredGridView {
 
             var component = Qt.createComponent("StreamSegue.qml")
             var segue = component.createObject(stackView, {
+                                                   "appModel":appModel,
                                                    "appName": model.name,
                                                    "session": appModel.createSessionForApp(index),
-                                                   "isResume": runningId === model.appid
+                                                   "isResume": runningId === model.appid,
+                                                    "appId":model.appid
                                                })
             stackView.push(segue)
         }
@@ -336,6 +338,19 @@ CenteredGridView {
                     ToolTip.visible: hovered
                 }
             }
+        }
+    }
+
+    Row {
+        anchors.centerIn: parent
+        spacing: 5
+        visible: appGrid.count === 0
+
+        Label {
+            text: qsTr("This computer doesn't seem to have any applications or some applications are hidden")
+            font.pointSize: 20
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.Wrap
         }
     }
 

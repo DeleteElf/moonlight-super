@@ -1,7 +1,7 @@
 #include "streaming/session.h"
 
 #include <Limelight.h>
-#include <SDL.h>
+#include "SDL_compat.h"
 
 #define VK_0 0x30
 #define VK_A 0x41
@@ -13,93 +13,80 @@
 #define VK_NUMPAD0 0x60
 #endif
 
-void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
+void SdlInputHandler::performSpecialKeyCombo(SDL_Window* m_Window, KeyCombo combo,short displayIndex)
 {
     switch (combo) {
     case KeyComboQuit:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected quit key combo");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected quit key combo");
 
         // Push a quit event to the main loop
         SDL_Event event;
         event.type = SDL_QUIT;
         event.quit.timestamp = SDL_GetTicks();
+        event.window.windowID=SDL_GetWindowID(m_Window);
         SDL_PushEvent(&event);
         break;
 
     case KeyComboUngrabInput:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected mouse capture toggle combo");
-
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected mouse capture toggle combo");
         // Stop handling future input
-        setCaptureActive(!isCaptureActive());
+        setCaptureActive(m_Window,!isCaptureActive(),displayIndex);
 
         // Force raise all keys to ensure they aren't stuck,
         // since we won't get their key up events.
-        raiseAllKeys();
+        raiseAllKeys(displayIndex);
         break;
 
     case KeyComboToggleFullScreen:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected full-screen toggle combo");
-        Session::s_ActiveSession->toggleFullscreen();
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected full-screen toggle combo");
+        Session::get()->getActiveWindow()->toggleFullscreen();
 
         // Force raise all keys just be safe across this full-screen/windowed
         // transition just in case key events get lost.
-        raiseAllKeys();
+        raiseAllKeys(displayIndex);
         break;
 
     case KeyComboToggleStatsOverlay:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected stats toggle combo");
-
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected stats toggle combo");
         // Toggle the stats overlay
         Session::get()->getOverlayManager().setOverlayState(Overlay::OverlayDebug,
                                                             !Session::get()->getOverlayManager().isOverlayEnabled(Overlay::OverlayDebug));
         break;
 
     case KeyComboToggleMouseMode:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected mouse mode toggle combo");
-
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected mouse mode toggle combo");
         // Uncapture input
-        setCaptureActive(false);
+        setCaptureActive(m_Window,false,displayIndex);
 
         // Toggle mouse mode
         m_AbsoluteMouseMode = !m_AbsoluteMouseMode;
 
         // Recapture input
-        setCaptureActive(true);
+        setCaptureActive(m_Window,true,displayIndex);
         break;
 
     case KeyComboToggleCursorHide:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected show mouse combo");
-
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected show mouse combo");
         if (!SDL_GetRelativeMouseMode()) {
             m_MouseCursorCapturedVisibilityState = !m_MouseCursorCapturedVisibilityState;
             SDL_ShowCursor(m_MouseCursorCapturedVisibilityState);
         }
         else {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                        "Cursor can only be shown in remote desktop mouse mode");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,"Cursor can only be shown in remote desktop mouse mode");
         }
         break;
 
     case KeyComboToggleMinimize:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected minimize combo");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected minimize combo");
         SDL_MinimizeWindow(m_Window);
         break;
 
     case KeyComboPasteText:
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected type clipboard text combo");
-
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected type clipboard text combo");
         // Force raise all keys to ensure that none of them interfere
         // with the text we're going to type.
-        raiseAllKeys();
+        raiseAllKeys(displayIndex);
 
         char* text;
         if (SDL_HasClipboardText() && (text = SDL_GetClipboardText()) != nullptr) {
@@ -127,8 +114,7 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
     }
 
     case KeyComboTogglePointerRegionLock:
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Detected pointer region lock toggle combo");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected pointer region lock toggle combo");
         m_PointerRegionLockActive = !m_PointerRegionLockActive;
 
         // Remember that the user changed this manually, so we don't mess with it anymore
@@ -136,7 +122,19 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
         m_PointerRegionLockToggledByUser = true;
 
         // Apply the new region lock
-        updatePointerRegionLock();
+        updatePointerRegionLock(m_Window);
+        break;
+
+    case KeyComboQuitAndExit:
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"Detected quitAndExit key combo");
+
+        // Indicate that we want to exit afterwards
+        Session::get()->setShouldExitAfterQuit();
+        // Push a quit event to the main loop
+        SDL_Event quitExitEvent;
+        quitExitEvent.type = SDL_QUIT;
+        quitExitEvent.quit.timestamp = SDL_GetTicks();
+        SDL_PushEvent(&quitExitEvent);
         break;
 
     default:
@@ -144,10 +142,11 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
     }
 }
 
-void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
+void SdlInputHandler::handleKeyEvent(SDL_Window* m_Window,SDL_KeyboardEvent* event,short displayIndex)
 {
     short keyCode;
     char modifiers;
+    bool shouldNotConvertToScanCodeOnServer = false;
 
     if (event->repeat) {
         // Ignore repeat key down events
@@ -173,14 +172,14 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
 
         for (int i = 0; i < KeyComboMax; i++) {
             if (m_SpecialKeyCombos[i].enabled && event->keysym.sym == m_SpecialKeyCombos[i].keyCode) {
-                performSpecialKeyCombo(m_SpecialKeyCombos[i].keyCombo);
+                performSpecialKeyCombo(m_Window,m_SpecialKeyCombos[i].keyCombo,displayIndex);
                 return;
             }
         }
 
         for (int i = 0; i < KeyComboMax; i++) {
             if (m_SpecialKeyCombos[i].enabled && event->keysym.scancode == m_SpecialKeyCombos[i].scanCode) {
-                performSpecialKeyCombo(m_SpecialKeyCombos[i].keyCombo);
+                performSpecialKeyCombo(m_Window,m_SpecialKeyCombos[i].keyCombo,displayIndex);
                 return;
             }
         }
@@ -198,7 +197,7 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
         modifiers |= MODIFIER_SHIFT;
     }
     if (event->keysym.mod & KMOD_GUI) {
-        if (isSystemKeyCaptureActive()) {
+        if (isSystemKeyCaptureActive(m_Window)) {
             modifiers |= MODIFIER_META;
         }
     }
@@ -343,13 +342,13 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
                 keyCode = 0xA5;
                 break;
             case SDL_SCANCODE_LGUI:
-                if (!isSystemKeyCaptureActive()) {
+                if (!isSystemKeyCaptureActive(m_Window)) {
                     return;
                 }
                 keyCode = 0x5B;
                 break;
             case SDL_SCANCODE_RGUI:
-                if (!isSystemKeyCaptureActive()) {
+                if (!isSystemKeyCaptureActive(m_Window)) {
                     return;
                 }
                 keyCode = 0x5C;
@@ -402,6 +401,8 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
             case SDL_SCANCODE_LEFTBRACKET:
                 keyCode = 0xDB;
                 break;
+            case SDL_SCANCODE_INTERNATIONAL3:
+                shouldNotConvertToScanCodeOnServer = true;
             case SDL_SCANCODE_BACKSLASH:
                 keyCode = 0xDC;
                 break;
@@ -411,8 +412,16 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
             case SDL_SCANCODE_APOSTROPHE:
                 keyCode = 0xDE;
                 break;
+            case SDL_SCANCODE_INTERNATIONAL1:
+                shouldNotConvertToScanCodeOnServer = true;
             case SDL_SCANCODE_NONUSBACKSLASH:
                 keyCode = 0xE2;
+                break;
+            case SDL_SCANCODE_LANG1:
+                keyCode = 0x1C;
+                break;
+            case SDL_SCANCODE_LANG2:
+                keyCode = 0x1D;
                 break;
             default:
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
@@ -430,8 +439,6 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
         m_KeysDown.remove(keyCode);
     }
 
-    LiSendKeyboardEvent(0x8000 | keyCode,
-                        event->state == SDL_PRESSED ?
-                            KEY_ACTION_DOWN : KEY_ACTION_UP,
-                        modifiers);
+    LiSendKeyboardEvent2(0x8000 | keyCode, event->state == SDL_PRESSED ? KEY_ACTION_DOWN : KEY_ACTION_UP, modifiers,
+                        shouldNotConvertToScanCodeOnServer ? SS_KBE_FLAG_NON_NORMALIZED : 0,displayIndex);
 }

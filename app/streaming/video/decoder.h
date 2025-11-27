@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Limelight.h>
-#include <SDL.h>
+#include "SDL_compat.h"
 #include "settings/streamingpreferences.h"
 
 #define SDL_CODE_FRAME_READY 0
@@ -35,7 +35,7 @@ typedef struct _VIDEO_STATS {
 typedef struct _DECODER_PARAMETERS {
     SDL_Window* window;
     StreamingPreferences::VideoDecoderSelection vds;
-
+    int trackIndex=-1;
     int videoFormat;
     int width;
     int height;

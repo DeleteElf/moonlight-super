@@ -10,12 +10,19 @@
 
 #include <QtDebug>
 
+#define SER_LOGIN_MODE "loginmode" //由陈浩扩展的登录模式
+#define SER_QUIT_GAME_WHEN_SESSION_FINISHED "quitGameWhenSessionFinished" //由陈浩扩展的退出模式
+#define SER_ENABLE_MICROPHONE "enableMicrophone" //由陈浩扩展的是否允许麦克风
+#define SER_MICROPHONE_MUTE_ON_FOCUS_LOSS "microphoneMuteOnFocusLoss" //由陈浩扩展的麦克风在窗口失去焦点后静音
+#define SER_MULTI_DISPLAY_SUPPORT "multiDisplaySupport" //多显示器支持
+
 #define SER_STREAMSETTINGS "streamsettings"
 #define SER_WIDTH "width"
 #define SER_HEIGHT "height"
 #define SER_FPS "fps"
 #define SER_BITRATE "bitrate"
 #define SER_UNLOCK_BITRATE "unlockbitrate"
+#define SER_AUTOADJUSTBITRATE "autoadjustbitrate"
 #define SER_FULLSCREEN "fullscreen"
 #define SER_VSYNC "vsync"
 #define SER_GAMEOPTS "gameopts"
@@ -34,6 +41,7 @@
 #define SER_STARTWINDOWED "startwindowed"
 #define SER_FRAMEPACING "framepacing"
 #define SER_CONNWARNINGS "connwarnings"
+#define SER_CONFWARNINGS "confwarnings"
 #define SER_UIDISPLAYMODE "uidisplaymode"
 #define SER_RICHPRESENCE "richpresence"
 #define SER_GAMEPADMOUSE "gamepadmouse"
@@ -115,37 +123,44 @@ void StreamingPreferences::reload()
         recommendedFullScreenMode = WindowMode::WM_FULLSCREEN;
     }
 #endif
+    loginMode=settings.value(SER_LOGIN_MODE, true).toBool();
+    quitGameWhenSessionFinished=settings.value(SER_QUIT_GAME_WHEN_SESSION_FINISHED, true).toBool();
+    enableMicrophone=settings.value(SER_ENABLE_MICROPHONE, true).toBool();
+    microphoneMuteOnFocusLoss=settings.value(SER_MICROPHONE_MUTE_ON_FOCUS_LOSS, true).toBool();
+    multiDisplaySupport=settings.value(SER_MULTI_DISPLAY_SUPPORT, true).toBool();
 
-    width = settings.value(SER_WIDTH, 1280).toInt();
-    height = settings.value(SER_HEIGHT, 720).toInt();
+    width = settings.value(SER_WIDTH, 1920).toInt();
+    height = settings.value(SER_HEIGHT, 1080).toInt();
     fps = settings.value(SER_FPS, 60).toInt();
     enableYUV444 = settings.value(SER_YUV444, false).toBool();
     bitrateKbps = settings.value(SER_BITRATE, getDefaultBitrate(width, height, fps, enableYUV444)).toInt();
     unlockBitrate = settings.value(SER_UNLOCK_BITRATE, false).toBool();
+    autoAdjustBitrate = settings.value(SER_AUTOADJUSTBITRATE, true).toBool();
     enableVsync = settings.value(SER_VSYNC, true).toBool();
     gameOptimizations = settings.value(SER_GAMEOPTS, true).toBool();
     playAudioOnHost = settings.value(SER_HOSTAUDIO, false).toBool();
     multiController = settings.value(SER_MULTICONT, true).toBool();
     enableMdns = settings.value(SER_MDNS, true).toBool();
     quitAppAfter = settings.value(SER_QUITAPPAFTER, false).toBool();
-    absoluteMouseMode = settings.value(SER_ABSMOUSEMODE, false).toBool();
+    absoluteMouseMode = settings.value(SER_ABSMOUSEMODE, true).toBool();
     absoluteTouchMode = settings.value(SER_ABSTOUCHMODE, true).toBool();
     framePacing = settings.value(SER_FRAMEPACING, false).toBool();
     connectionWarnings = settings.value(SER_CONNWARNINGS, true).toBool();
+    configurationWarnings = settings.value(SER_CONFWARNINGS, true).toBool();
     richPresence = settings.value(SER_RICHPRESENCE, true).toBool();
     gamepadMouse = settings.value(SER_GAMEPADMOUSE, true).toBool();
     detectNetworkBlocking = settings.value(SER_DETECTNETBLOCKING, true).toBool();
     showPerformanceOverlay = settings.value(SER_SHOWPERFOVERLAY, false).toBool();
     packetSize = settings.value(SER_PACKETSIZE, 0).toInt();
     swapMouseButtons = settings.value(SER_SWAPMOUSEBUTTONS, false).toBool();
-    muteOnFocusLoss = settings.value(SER_MUTEONFOCUSLOSS, false).toBool();
+    muteOnFocusLoss = settings.value(SER_MUTEONFOCUSLOSS, true).toBool();
     backgroundGamepad = settings.value(SER_BACKGROUNDGAMEPAD, false).toBool();
     reverseScrollDirection = settings.value(SER_REVERSESCROLL, false).toBool();
     swapFaceButtons = settings.value(SER_SWAPFACEBUTTONS, false).toBool();
     keepAwake = settings.value(SER_KEEPAWAKE, true).toBool();
     enableHdr = settings.value(SER_HDR, false).toBool();
     captureSysKeysMode = static_cast<CaptureSysKeysMode>(settings.value(SER_CAPTURESYSKEYS,
-                                                         static_cast<int>(CaptureSysKeysMode::CSK_OFF)).toInt());
+                                                         static_cast<int>(CaptureSysKeysMode::CSK_FULLSCREEN)).toInt());
     audioConfig = static_cast<AudioConfig>(settings.value(SER_AUDIOCFG,
                                                   static_cast<int>(AudioConfig::AC_STEREO)).toInt());
     videoCodecConfig = static_cast<VideoCodecConfig>(settings.value(SER_VIDEOCFG,
@@ -297,6 +312,12 @@ QString StreamingPreferences::getSuffixFromLanguage(StreamingPreferences::Langua
         return "lt";
     case LANG_ET:
         return "et";
+    case LANG_BG:
+        return "bg";
+    case LANG_EO:
+        return "eo";
+    case LANG_TA:
+        return "ta";
     case LANG_AUTO:
     default:
         return QLocale::system().name();
@@ -306,12 +327,18 @@ QString StreamingPreferences::getSuffixFromLanguage(StreamingPreferences::Langua
 void StreamingPreferences::save()
 {
     QSettings settings;
+    settings.setValue(SER_LOGIN_MODE,loginMode);
+    settings.setValue(SER_QUIT_GAME_WHEN_SESSION_FINISHED,quitGameWhenSessionFinished);
+    settings.setValue(SER_ENABLE_MICROPHONE,enableMicrophone);
+    settings.setValue(SER_MICROPHONE_MUTE_ON_FOCUS_LOSS,microphoneMuteOnFocusLoss);
+    settings.setValue(SER_MULTI_DISPLAY_SUPPORT,multiDisplaySupport);
 
     settings.setValue(SER_WIDTH, width);
     settings.setValue(SER_HEIGHT, height);
     settings.setValue(SER_FPS, fps);
     settings.setValue(SER_BITRATE, bitrateKbps);
     settings.setValue(SER_UNLOCK_BITRATE, unlockBitrate);
+    settings.setValue(SER_AUTOADJUSTBITRATE, autoAdjustBitrate);
     settings.setValue(SER_VSYNC, enableVsync);
     settings.setValue(SER_GAMEOPTS, gameOptimizations);
     settings.setValue(SER_HOSTAUDIO, playAudioOnHost);
@@ -322,6 +349,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_ABSTOUCHMODE, absoluteTouchMode);
     settings.setValue(SER_FRAMEPACING, framePacing);
     settings.setValue(SER_CONNWARNINGS, connectionWarnings);
+    settings.setValue(SER_CONFWARNINGS, configurationWarnings);
     settings.setValue(SER_RICHPRESENCE, richPresence);
     settings.setValue(SER_GAMEPADMOUSE, gamepadMouse);
     settings.setValue(SER_PACKETSIZE, packetSize);

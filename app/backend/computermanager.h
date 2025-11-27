@@ -245,6 +245,9 @@ public:
 
     void clientSideAttributeUpdated(NvComputer* computer);
 
+    QString httpGet(NvComputer* computer,QString url,QString username,QString pwd);
+    QString httpPost(NvComputer* computer,QString url,QString username,QString pwd,QByteArray body);
+
 signals:
     void computerStateChanged(NvComputer* computer);
 

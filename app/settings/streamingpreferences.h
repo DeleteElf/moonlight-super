@@ -94,6 +94,9 @@ public:
         LANG_CKB,
         LANG_LT,
         LANG_ET,
+        LANG_BG,
+        LANG_EO,
+        LANG_TA,
     };
     Q_ENUM(Language);
 
@@ -104,12 +107,18 @@ public:
         CSK_ALWAYS,
     };
     Q_ENUM(CaptureSysKeysMode);
+    Q_PROPERTY(bool loginMode MEMBER loginMode NOTIFY loginModeChanged)
+    Q_PROPERTY(bool quitGameWhenSessionFinished MEMBER quitGameWhenSessionFinished NOTIFY quitGameWhenSessionFinishedChanged)
+    Q_PROPERTY(bool enableMicrophone MEMBER enableMicrophone NOTIFY enableMicrophoneChanged)
+    Q_PROPERTY(bool microphoneMuteOnFocusLoss MEMBER microphoneMuteOnFocusLoss NOTIFY microphoneMuteOnFocusLossChanged)
+    Q_PROPERTY(bool multiDisplaySupport MEMBER multiDisplaySupport NOTIFY multiDisplaySupportChanged)
 
     Q_PROPERTY(int width MEMBER width NOTIFY displayModeChanged)
     Q_PROPERTY(int height MEMBER height NOTIFY displayModeChanged)
     Q_PROPERTY(int fps MEMBER fps NOTIFY displayModeChanged)
     Q_PROPERTY(int bitrateKbps MEMBER bitrateKbps NOTIFY bitrateChanged)
     Q_PROPERTY(bool unlockBitrate MEMBER unlockBitrate NOTIFY unlockBitrateChanged)
+    Q_PROPERTY(bool autoAdjustBitrate MEMBER autoAdjustBitrate NOTIFY autoAdjustBitrateChanged)
     Q_PROPERTY(bool enableVsync MEMBER enableVsync NOTIFY enableVsyncChanged)
     Q_PROPERTY(bool gameOptimizations MEMBER gameOptimizations NOTIFY gameOptimizationsChanged)
     Q_PROPERTY(bool playAudioOnHost MEMBER playAudioOnHost NOTIFY playAudioOnHostChanged)
@@ -120,6 +129,7 @@ public:
     Q_PROPERTY(bool absoluteTouchMode MEMBER absoluteTouchMode NOTIFY absoluteTouchModeChanged)
     Q_PROPERTY(bool framePacing MEMBER framePacing NOTIFY framePacingChanged)
     Q_PROPERTY(bool connectionWarnings MEMBER connectionWarnings NOTIFY connectionWarningsChanged)
+    Q_PROPERTY(bool configurationWarnings MEMBER configurationWarnings NOTIFY configurationWarningsChanged)
     Q_PROPERTY(bool richPresence MEMBER richPresence NOTIFY richPresenceChanged)
     Q_PROPERTY(bool gamepadMouse MEMBER gamepadMouse NOTIFY gamepadMouseChanged)
     Q_PROPERTY(bool detectNetworkBlocking MEMBER detectNetworkBlocking NOTIFY detectNetworkBlockingChanged)
@@ -144,11 +154,18 @@ public:
     Q_INVOKABLE bool retranslate();
 
     // Directly accessible members for preferences
+    bool loginMode;
+    bool quitGameWhenSessionFinished;
+    bool enableMicrophone;
+    bool microphoneMuteOnFocusLoss;
+    bool multiDisplaySupport;
+
     int width;
     int height;
     int fps;
     int bitrateKbps;
     bool unlockBitrate;
+    bool autoAdjustBitrate;
     bool enableVsync;
     bool gameOptimizations;
     bool playAudioOnHost;
@@ -159,6 +176,7 @@ public:
     bool absoluteTouchMode;
     bool framePacing;
     bool connectionWarnings;
+    bool configurationWarnings;
     bool richPresence;
     bool gamepadMouse;
     bool detectNetworkBlocking;
@@ -182,9 +200,16 @@ public:
     CaptureSysKeysMode captureSysKeysMode;
 
 signals:
+    void loginModeChanged();
+    void quitGameWhenSessionFinishedChanged();
+    void enableMicrophoneChanged();
+    void microphoneMuteOnFocusLossChanged();
+    void multiDisplaySupportChanged();
+
     void displayModeChanged();
     void bitrateChanged();
     void unlockBitrateChanged();
+    void autoAdjustBitrateChanged();
     void enableVsyncChanged();
     void gameOptimizationsChanged();
     void playAudioOnHostChanged();
@@ -203,6 +228,7 @@ signals:
     void windowModeChanged();
     void framePacingChanged();
     void connectionWarningsChanged();
+    void configurationWarningsChanged();
     void richPresenceChanged();
     void gamepadMouseChanged();
     void detectNetworkBlockingChanged();

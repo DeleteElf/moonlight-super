@@ -31,12 +31,15 @@ public:
 
     void submitFrame(AVFrame* frame);
 
-    bool initialize(SDL_Window* window, int maxVideoFps, bool enablePacing);
+    bool initialize(SDL_Window* window, int maxVideoFps, bool enablePacing,int trackIndex);
 
     void signalVsync();
 
     void renderOnMainThread();
 
+    int getTrackIndex(){
+        return trackIndex;
+    }
 private:
     static int vsyncThread(void* context);
 
@@ -68,4 +71,7 @@ private:
     int m_DisplayFps;
     PVIDEO_STATS m_VideoStats;
     int m_RendererAttributes;
+
+    int trackIndex;
+    int windowId;
 };

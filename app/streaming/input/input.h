@@ -3,7 +3,7 @@
 #include "settings/streamingpreferences.h"
 #include "backend/computermanager.h"
 
-#include <SDL.h>
+#include "SDL_compat.h"
 
 struct GamepadState {
     SDL_GameController* controller;
@@ -38,6 +38,37 @@ struct GamepadState {
     unsigned char lt, rt;
 };
 
+
+struct DualSenseOutputReport{
+    uint8_t validFlag0;
+    uint8_t validFlag1;
+
+    /* For DualShock 4 compatibility mode. */
+    uint8_t motorRight;
+    uint8_t motorLeft;
+
+    /* Audio controls */
+    uint8_t reserved[4];
+    uint8_t muteButtonLed;
+
+    uint8_t powerSaveControl;
+    uint8_t rightTriggerEffectType;
+    uint8_t rightTriggerEffect[DS_EFFECT_PAYLOAD_SIZE];
+    uint8_t leftTriggerEffectType;
+    uint8_t leftTriggerEffect[DS_EFFECT_PAYLOAD_SIZE];
+    uint8_t reserved2[6];
+
+    /* LEDs and lightbar */
+    uint8_t validFlag2;
+    uint8_t reserved3[2];
+    uint8_t lightbarSetup;
+    uint8_t ledBrightness;
+    uint8_t playerLeds;
+    uint8_t lightbarRed;
+    uint8_t lightbarGreen;
+    uint8_t lightbarBlue;
+};
+
 // activeGamepadMask is a short, so we're bounded by the number of mask bits
 #define MAX_GAMEPADS 16
 
@@ -57,15 +88,13 @@ public:
 
     ~SdlInputHandler();
 
-    void setWindow(SDL_Window* window);
+    void handleKeyEvent(SDL_Window* m_Window,SDL_KeyboardEvent* event,short displayIndex);
 
-    void handleKeyEvent(SDL_KeyboardEvent* event);
+    void handleMouseButtonEvent(SDL_Window* m_Window,SDL_MouseButtonEvent* event,short displayIndex);
 
-    void handleMouseButtonEvent(SDL_MouseButtonEvent* event);
+    void handleMouseMotionEvent(SDL_Window* m_Window,SDL_MouseMotionEvent* event,short displayIndex);
 
-    void handleMouseMotionEvent(SDL_MouseMotionEvent* event);
-
-    void handleMouseWheelEvent(SDL_MouseWheelEvent* event);
+    void handleMouseWheelEvent(SDL_Window* m_Window,SDL_MouseWheelEvent* event);
 
     void handleControllerAxisEvent(SDL_ControllerAxisEvent* event);
 
@@ -95,27 +124,29 @@ public:
 
     void setControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b);
 
-    void handleTouchFingerEvent(SDL_TouchFingerEvent* event);
+    void setAdaptiveTriggers(uint16_t controllerNumber, DualSenseOutputReport *report);
+
+    void handleTouchFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event,short displayIndex);
 
     int getAttachedGamepadMask();
 
-    void raiseAllKeys();
+    void raiseAllKeys(short displayIndex);
 
     void notifyMouseLeave();
 
-    void notifyFocusLost();
+    void notifyFocusLost(SDL_Window* m_Window,short displayIndex);
 
     bool isCaptureActive();
 
-    bool isSystemKeyCaptureActive();
+    bool isSystemKeyCaptureActive(SDL_Window* m_Window);
 
-    void setCaptureActive(bool active);
+    void setCaptureActive(SDL_Window* m_Window,bool active,short displayIndex);
 
-    bool isMouseInVideoRegion(int mouseX, int mouseY, int windowWidth = -1, int windowHeight = -1);
+    bool isMouseInVideoRegion(SDL_Window* m_Window,int mouseX, int mouseY, int windowWidth = -1, int windowHeight = -1);
 
-    void updateKeyboardGrabState();
+    void updateKeyboardGrabState(SDL_Window* m_Window);
 
-    void updatePointerRegionLock();
+    void updatePointerRegionLock(SDL_Window* m_Window);
 
     static
     QString getUnmappedGamepads();
@@ -131,6 +162,7 @@ private:
         KeyComboToggleMinimize,
         KeyComboPasteText,
         KeyComboTogglePointerRegionLock,
+        KeyComboQuitAndExit,
         KeyComboMax
     };
 
@@ -141,15 +173,15 @@ private:
 
     void sendGamepadBatteryState(GamepadState* state, SDL_JoystickPowerLevel level);
 
-    void handleAbsoluteFingerEvent(SDL_TouchFingerEvent* event);
+    void handleAbsoluteFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event,short displayIndex);
 
-    void emulateAbsoluteFingerEvent(SDL_TouchFingerEvent* event);
+    void emulateAbsoluteFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event,short displayIndex);
 
-    void disableTouchFeedback();
+    void disableTouchFeedback(SDL_Window* m_Window);
 
-    void handleRelativeFingerEvent(SDL_TouchFingerEvent* event);
+    void handleRelativeFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event);
 
-    void performSpecialKeyCombo(KeyCombo combo);
+    void performSpecialKeyCombo(SDL_Window* m_Window,KeyCombo combo,short displayIndex);
 
     static
     Uint32 longPressTimerCallback(Uint32 interval, void* param);
@@ -166,7 +198,6 @@ private:
     static
     Uint32 dragTimerCallback(Uint32 interval, void* param);
 
-    SDL_Window* m_Window;
     bool m_MultiController;
     bool m_GamepadMouse;
     bool m_SwapMouseButtons;

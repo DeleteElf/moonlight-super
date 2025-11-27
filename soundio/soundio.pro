@@ -43,10 +43,10 @@ unix:!macx {
 
 DEFINES += \
     SOUNDIO_STATIC_LIBRARY               \
-    SOUNDIO_VERSION_MAJOR=1              \
-    SOUNDIO_VERSION_MINOR=1              \
+    SOUNDIO_VERSION_MAJOR=2              \
+    SOUNDIO_VERSION_MINOR=0              \
     SOUNDIO_VERSION_PATCH=0              \
-    SOUNDIO_VERSION_STRING=\\\"1.1.0\\\"
+    SOUNDIO_VERSION_STRING=\\\"2.0.0\\\"
 
 SRC_DIR = $$PWD/libsoundio/src
 INC_DIR = $$PWD/libsoundio

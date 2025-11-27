@@ -2,6 +2,7 @@
 #include "boxartmanager.h"
 #include "nvhttp.h"
 #include "nvpairingmanager.h"
+#include "httpclient.h"
 
 #include <Limelight.h>
 #include <QtEndian>
@@ -9,7 +10,7 @@
 #include <QThread>
 #include <QThreadPool>
 #include <QCoreApplication>
-
+#include <QCryptographicHash>
 #include <random>
 
 #define SER_HOSTS "hosts"
@@ -974,6 +975,60 @@ QString ComputerManager::generatePinString()
     std::mt19937 engine(rd());
 
     return QString::asprintf("%04u", dist(engine));
+}
+
+QString ComputerManager::httpGet(NvComputer* computer,QString url,QString username,QString pwd){
+    QUrl requestUrl;
+    requestUrl.setScheme("https");
+    requestUrl.setHost(computer->activeAddress.address());
+    requestUrl.setPort(47990);
+    requestUrl.setPath(url);
+
+    HttpClient httpClient;
+    QNetworkRequest request= httpClient.createRequest(requestUrl);
+
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QString authoration="Basic "+QString("%1:%2").arg(username).arg(pwd).toUtf8().toBase64();
+    request.setRawHeader("Authorization",authoration.toUtf8());
+
+    QNetworkReply* reply=httpClient.get(request);
+
+    QString result="";
+    try{
+        httpClient.requestTo(reply);
+        result= httpClient.handleResponseString(reply);
+        delete reply;
+    }catch(HttpResponseException ex){
+        qWarning() << request.url() << "请求服务器发生错误:" << ex.getStatusMessage();
+    }
+    return result;
+}
+
+QString ComputerManager::httpPost(NvComputer* computer,QString url,QString username,QString pwd,QByteArray body){
+    QUrl requestUrl;
+    requestUrl.setScheme("https");
+    requestUrl.setHost(computer->activeAddress.address());
+    requestUrl.setPort(47990);
+    requestUrl.setPath(url);
+
+    HttpClient httpClient;
+    QNetworkRequest request= httpClient.createRequest(requestUrl);
+
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QString authoration="Basic "+QString("%1:%2").arg(username).arg(pwd).toUtf8().toBase64();
+    request.setRawHeader("Authorization",authoration.toUtf8());
+
+    QNetworkReply* reply= httpClient.post(request,body);
+
+    QString result="";
+    try{
+        httpClient.requestTo(reply);
+        result= httpClient.handleResponseString(reply);
+        delete reply;
+    }catch(HttpResponseException ex){
+        qWarning() << request.url() << "服务器证书错误:" << ex.getStatusMessage();
+    }
+    return result;
 }
 
 #include "computermanager.moc"

@@ -1,7 +1,7 @@
 #include "streaming/session.h"
 
 #include <Limelight.h>
-#include <SDL.h>
+#include "SDL_compat.h"
 #include "settings/mappingmanager.h"
 
 #include <QtMath>
@@ -330,7 +330,7 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
 
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Mouse emulation deactivated");
-                    Session::get()->notifyMouseEmulationMode(false);
+                    Session::get()->getActiveWindow()->notifyMouseEmulationMode(false);
                 }
                 else if (m_GamepadMouse) {
                     // Send the start button up event to the host, since we won't do it below
@@ -340,7 +340,7 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
 
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Mouse emulation active");
-                    Session::get()->notifyMouseEmulationMode(true);
+                    Session::get()->getActiveWindow()->notifyMouseEmulationMode(true);
                 }
             }
         }
@@ -724,7 +724,7 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
         state = findStateForGamepad(event->which);
         if (state != NULL) {
             if (state->mouseEmulationTimer != 0) {
-                Session::get()->notifyMouseEmulationMode(false);
+                Session::get()->getActiveWindow()->notifyMouseEmulationMode(false);
                 SDL_RemoveTimer(state->mouseEmulationTimer);
             }
 
@@ -900,6 +900,22 @@ void SdlInputHandler::setControllerLED(uint16_t controllerNumber, uint8_t r, uin
 #endif
 }
 
+void SdlInputHandler::setAdaptiveTriggers(uint16_t controllerNumber, DualSenseOutputReport *report){
+
+#if SDL_VERSION_ATLEAST(2, 0, 16)
+        // Make sure the controller number is within our supported count
+    if (controllerNumber <= MAX_GAMEPADS &&
+        // and we have a valid controller
+        m_GamepadState[controllerNumber].controller != nullptr &&
+        // and it's a PS5 controller
+        SDL_GameControllerGetType(m_GamepadState[controllerNumber].controller) == SDL_CONTROLLER_TYPE_PS5) {
+        SDL_GameControllerSendEffect(m_GamepadState[controllerNumber].controller, report, sizeof(*report));
+    }
+#endif
+
+    SDL_free(report);
+}
+
 QString SdlInputHandler::getUnmappedGamepads()
 {
     QString ret;
@@ -913,7 +929,8 @@ QString SdlInputHandler::getUnmappedGamepads()
     MappingManager mappingManager;
     mappingManager.applyMappings();
 
-    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    int numJoysticks = SDL_NumJoysticks();
+    for (int i = 0; i < numJoysticks; i++) {
         if (!SDL_IsGameController(i)) {
             char guidStr[33];
             SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(i),
@@ -973,7 +990,8 @@ int SdlInputHandler::getAttachedGamepadMask()
     }
 
     count = mask = 0;
-    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+    int numJoysticks = SDL_NumJoysticks();
+    for (int i = 0; i < numJoysticks; i++) {
         if (SDL_IsGameController(i)) {
             char guidStr[33];
             SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(i),

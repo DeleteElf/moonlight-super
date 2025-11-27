@@ -1,7 +1,7 @@
 #include "input.h"
 
 #include <Limelight.h>
-#include <SDL.h>
+#include "SDL_compat.h"
 
 #include <QtMath>
 
@@ -44,7 +44,7 @@ Uint32 SdlInputHandler::dragTimerCallback(Uint32, void *param)
     return 0;
 }
 
-void SdlInputHandler::handleRelativeFingerEvent(SDL_TouchFingerEvent* event)
+void SdlInputHandler::handleRelativeFingerEvent(SDL_Window* m_Window,SDL_TouchFingerEvent* event)
 {
     int fingerIndex = -1;
 
