@@ -71,7 +71,7 @@ cat > /root/.config/sway/config <<EOF
 #设备背景
 output * background ${DIR}/bg.png fill
 # 这个设备目前没有效果
-# output "Cg Teamwork Company Remote Desktop" pos 0 0
+# output "Moonlight Company Remote Desktop" pos 0 0
 #声音相关
 # 静音
 bindsym --locked Control+F1 exec pactl set-sink-mute @DEFAULT_SINK@ toggle

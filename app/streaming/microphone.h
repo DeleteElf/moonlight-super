@@ -20,9 +20,9 @@ namespace audio {
         SoundIoFormat format;
         bool encoded=false;
         char* data;
-        long build_timestamp;
-        long filled_timestamp;
-        long encoded_timestamp;
+        int64_t build_timestamp;
+        int64_t filled_timestamp;
+        int64_t encoded_timestamp;
     };
     class AudioDevice;
     class Microphone : public QObject
@@ -36,7 +36,7 @@ namespace audio {
 
         // 网络参数
 //        int DEFAULT_MIC_PORT = 47996; // 默认麦克风端口
-        int MAX_QUEUE_SIZE = 50; //为解决盒子上采样问题，暂时先保存2秒的数据，原来是保存200毫秒的数据
+        int MAX_QUEUE_SIZE = 5; //为解决盒子上采样问题，暂时先保存2秒的数据，原来是保存200毫秒的数据
 
 //        int HOST_REQUEST_CHECK_INTERVAL_MS = 500; // 检查主机请求状态的间隔
         // 权限请求码
@@ -55,10 +55,10 @@ namespace audio {
         int CAPTURE_BUFFER_SIZE_MS = 40; // 捕获缓冲区大小 (毫秒)
         int CAPTURE_BUFFER_SIZE = SAMPLE_RATE * CAPTURE_BUFFER_SIZE_MS / 1000 * CHANNELS * 2;
         int FRAME_INTERVAL_MS = 20; // 帧间隔时间 (毫秒)
-        long FRAME_INTERVAL_NS = FRAME_INTERVAL_MS * 1000000L; // 帧间隔纳秒
+        int64_t FRAME_INTERVAL_NS = FRAME_INTERVAL_MS * 1000000L; // 帧间隔纳秒
         // 音频质量参数
         bool ENABLE_AUDIO_SYNC = true; // 启用音频同步
-        int MAX_FRAME_DELAY_MS = 50; // 最大帧延迟 (毫秒)
+        int MAX_FRAME_DELAY_MS = 80; // 最大帧延迟 (毫秒)
 
         struct SoundIo *soundio;
         std::vector<int> sampleRates;
@@ -76,7 +76,7 @@ namespace audio {
         bool isSendingData;//是否开始发送数据，开始发送数据后，发送线程才会开始工作
         static OpusEncoder* opusEncoder;
 
-        long lastFrameTime; //最后的帧时间
+        int64_t lastFrameTime; //最后的帧时间
         /**
          * @brief senderThreadRun 对麦克风的流进行编码，采用独立线程设计
          */

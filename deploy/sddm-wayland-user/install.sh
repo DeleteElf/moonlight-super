@@ -125,7 +125,7 @@ update-grub
 # 创建Moonlight服务
 cat > Moonlight.service <<EOF
 [Unit]
-Description=Cg Teamwork Remote Desktop Service
+Description=Moonlight Remote Desktop Service
 Requires=sddm.service
 #重试的时间
 StartLimitIntervalSec=0

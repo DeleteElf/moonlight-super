@@ -197,10 +197,9 @@ namespace audio {
         return y0 + (y1 - y0) * ((x - x0) / (x1 - x0));
     }
 
-    long getCurrentTime(){
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-        return duration.count();
+    int64_t getCurrentTime(){
+        auto now = std::chrono::system_clock::now().time_since_epoch();//std::chrono::high_resolution_clock::now();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
 
     static int64_t seqNumber=0;
@@ -464,7 +463,7 @@ namespace audio {
                 auto temp=samples->first();
                 if(temp!=nullptr&&temp->encoded){ //
                     auto audioData=samples->pop();//从环形缓存中取出第一个
-                    long currentTime=getCurrentTime();
+                    int64_t currentTime=getCurrentTime();
                     while (audioDevice->microphone->ENABLE_AUDIO_SYNC&&
                            currentTime-audioDevice->microphone->lastFrameTime<audioDevice->microphone->FRAME_INTERVAL_MS*0.8){
                         std::this_thread::sleep_for(1ms);//开启声音同步后，如果太快就减速
