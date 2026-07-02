@@ -3,11 +3,11 @@
 #### 热键说明
 ##### 本地客户端
 ```text
-CTRL+ALT+SHIFT+Q 关闭窗口
+CTRL+ALT+SHIFT+Q 关闭窗口，多窗口模式下，可以单独关闭某个窗口
 CTRL+ALT+SHIFT+E 关闭所有窗口，并退出远程
 CTRL+ALT+SHIFT+S 屏幕打印参数
 CTRL+ALT+SHIFT+M 切换鼠标的模式，远程桌面模式(不捕获鼠标)、游戏模式(捕获鼠标)
-CTRL+ALT+SHIFT+Z 取消捕获鼠标，释放鼠标，以移除窗口范围
+CTRL+ALT+SHIFT+Z 取消捕获鼠标，释放鼠标，以移出窗口范围
 CTRL+ALT+SHIFT+X 切换全屏模式，窗口模式与全屏模式之间切换
 CTRL+ALT+SHIFT+D 最小化窗口
 CTRL+ALT+SHIFT+C 远程桌面时，显示本地的鼠标位置，这个需要注意，可能会有滞后效果。
